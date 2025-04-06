@@ -1,0 +1,113 @@
+# Configuration for pytest end-to-end test
+
+# General settings
+output_dir: pytest_results/ # Relative to project root (cwd of the script)
+run_name: pinn_pytest_e2e_run
+seed: 42
+device: cpu # Force CPU for lower hardware requirements and consistency in tests
+use_mixed_precision: false
+
+# Data settings
+data:
+  processed_dir: pytest_data/processed # Relative to project root (cwd of the script)
+  train_split: 0.5 # Use fewer samples for training/val during test
+  val_split: 0.5
+  num_workers: 0
+  # --- NEW: Normalization Config ---
+  normalization:
+    enabled: true
+    mode: 'standardize' # Or 'minmax'
+    compute_stats: true # Compute stats from the training data
+    # Save stats within the test results directory for this run
+    stats_file: pytest_results/pinn_pytest_e2e_run/norm_stats.json # Relative to project root (where scripts run)
+    fields: ['initial_topo', 'final_topo', 'uplift_rate', 'k_f', 'k_d'] # Fields to normalize
+
+# Data generation settings
+data_generation:
+  resolutions: [[17, 17]] # Explicitly set the resolution to match grid_shape
+  parameter_type: spatial # Moved inside data_generation
+  num_samples: 2 # Generate only 2 samples
+  output_dir: pytest_data/processed # Relative to project root (cwd of the script)
+  simulation_params:
+    grid_shape: [17, 17] # Even smaller grid
+    grid_length: [100, 100]
+    time_step: 50
+    run_time: 500 # Shorter run time
+    boundary_status: fixed_value
+  parameter_ranges: # Define ranges or fixed values for SCALAR parameters
+    # uplift__rate, spl__k_coef will be ignored if parameter_type is spatial and config exists below
+    diffusion__diffusivity: [0.2, 0.2] # Fixed scalar value
+    spl__area_exp: [0.5, 0.5]          # Fixed scalar value for m
+    spl__slope_exp: [1.0, 1.0]         # Fixed scalar value for n
+
+  spatial_parameter_config: # Configuration for parameters that CAN be spatial
+    uplift__rate:           # Uplift CAN be spatial
+      min: 0.0005
+      max: 0.0015
+      pattern: random       # Generate a random field for testing
+    spl__k_coef:            # K_f CAN be spatial
+      min: 0.000002
+      pattern: constant     # Generate a constant field for testing
+    # diffusion__diffusivity, spl__area_exp, spl__slope_exp are configured above as scalar
+
+# Model architecture settings
+model:
+  name: AdaptiveFastscapePINN # Specify the model type to load
+  input_dim: 3
+  output_dim: 1
+  hidden_dim: 16 # Very small MLP
+  num_layers: 2
+  # grid_height/width might not be needed if model infers from data or physics_params
+  # Keep them if AdaptiveFastscapePINN constructor requires them explicitly
+  base_resolution: 16 # For Adaptive model testing (must be <= grid_shape)
+  max_resolution: 32 # For Adaptive model testing
+  # Ensure other model params match the chosen model's __init__ signature
+  # For AdaptiveFastscapePINN, input_dim is likely fixed (e.g., 5 for x,y,t,k,u)
+  input_dim: 5
+
+# Physics parameters
+physics_params:
+  # Parameters used by the physics equations
+  m: 0.5 # spl__area_exp
+  n: 1.0 # spl__slope_exp
+  # k_d: 0.01 # diffusion__diffusivity - Provided by data generation config
+  # U: Provided by data generation config (potentially spatial)
+  # K_f: Provided by data generation config (potentially spatial)
+
+  # Parameters needed for calculations (grid spacing, domain size)
+  # Calculate dx, dy based on domain size and grid shape
+  dx: 100.0 / (17 - 1) # domain_size_x / (width - 1)
+  dy: 100.0 / (17 - 1) # domain_size_y / (height - 1)
+  domain_x: [0.0, 100.0] # Corresponds to grid_length[1]
+  domain_y: [0.0, 100.0] # Corresponds to grid_length[0]
+  grid_height: 17 # Explicitly provide grid dimensions needed by some loss functions
+  grid_width: 17
+  total_time: 500.0 # Match run time
+
+  # Parameters for drainage area calculation (if needed by physics.py)
+  drainage_area_kwargs:
+    temp: 0.05
+    num_iters: 10
+
+# Training settings
+training:
+  epochs: 1 # Only 1 epoch
+  batch_size: 1 # Smallest batch size
+  optimizer: AdamW
+  learning_rate: 1.0e-4
+  weight_decay: 0.0 # No weight decay for simple test
+  lr_scheduler: null # No scheduler
+  pde_loss_method: 'grid_focused' # Use the new grid-based PDE loss
+  loss_weights:
+    data: 1.0
+    physics: 0.1 # Weight for the PDE residual loss
+    conservation: 0.0 # Placeholder
+    smoothness: 0.0 # Set to > 0 to test smoothness penalty
+  clip_grad_norm: null
+  use_loss_scaling: false
+  val_interval: 1
+  save_best_only: false
+  save_interval: 1 # Save checkpoint after the single epoch
+  run_test_evaluation: false
+  load_checkpoint: null
+  n_collocation_points: 100 # Fewer points for faster testing if using non-grid PDE loss

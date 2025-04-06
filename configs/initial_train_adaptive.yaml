@@ -1,0 +1,64 @@
+# Training configuration for AdaptiveFastscapePINN
+
+output_dir: PINN_Fastscape_Framework/training_results # Directory to save logs and checkpoints
+run_name: adaptive_pinn_initial_train_v1 # Specific name for this training run
+seed: 42 # For reproducibility
+device: cuda # Use 'cuda' if GPU is available, otherwise 'cpu'
+use_mixed_precision: true # Enable mixed precision for faster training on supported GPUs
+
+data:
+  processed_dir: PINN_Fastscape_Framework/data/processed # Path to your preprocessed training data (.pt files)
+  train_split: 0.8 # Proportion of data for training
+  val_split: 0.2   # Proportion of data for validation
+  num_workers: 0   # Number of workers for DataLoader (0 often safer on Windows)
+
+model:
+  type: AdaptiveFastscapePINN # Specify the model class to use
+  input_dim: 5         # Input dimension for the coordinate MLP (x, y, t, k, u)
+  output_dim: 1        # Output dimension (topography h)
+  hidden_dim: 256      # Number of neurons in hidden layers
+  num_layers: 8        # Number of hidden layers in MLP
+  base_resolution: 64  # Base resolution for CNN processing
+  max_resolution: 512 # Max resolution handled by multi-resolution strategy before tiling
+
+physics_params:
+  # Define the spatio-temporal domain and physical constants
+  # Ensure these match the characteristics of your generated data if possible
+  domain_x: [0.0, 1000.0] # Example physical x-domain extent [min, max]
+  domain_y: [0.0, 1000.0] # Example physical y-domain extent [min, max]
+  dx: 10.0               # Example grid spacing in x (used for derivative calculations)
+  dy: 10.0               # Example grid spacing in y
+  m: 0.5                 # Stream power law exponent for drainage area
+  n: 1.0                 # Stream power law exponent for slope
+  K_d: 0.01              # Hillslope diffusion coefficient
+  epsilon: 1.0e-8        # Small value added for numerical stability (e.g., in sqrt)
+  total_time: 10000.0    # Max time for sampling collocation points (should cover data run times)
+  drainage_area_kwargs: {} # Optional kwargs for drainage area calculation in physics loss
+
+training:
+  epochs: 1000           # Initial number of training epochs (likely needs more)
+  batch_size: 4          # Adjust based on GPU memory capacity
+  num_collocation_points: 10000 # Number of physics points sampled per batch
+  optimizer: AdamW       # Optimizer type (AdamW recommended)
+  learning_rate: 1.0e-4  # Initial learning rate
+  weight_decay: 1.0e-5   # Weight decay for regularization
+  loss_weights:          # Relative importance of different loss terms
+    data: 1.0            # Weight for matching simulation data
+    physics: 0.1         # Weight for satisfying the PDE (start lower, tune later)
+    smoothness: 0.0      # Optional smoothness penalty (set > 0 to enable)
+  lr_scheduler:          # Learning rate scheduling configuration
+    name: ReduceLROnPlateau # Scheduler type
+    factor: 0.5          # Factor to reduce LR by
+    patience: 50         # Epochs to wait for improvement before reducing LR
+    min_lr: 1.0e-6       # Minimum learning rate
+  val_interval: 10       # Run validation every N epochs
+  save_best_only: true   # Only save the checkpoint with the best validation loss
+  # clip_grad_norm: 1.0  # Optional: Gradient clipping value (uncomment to enable)
+
+# Optional: Add dataset_params if normalization stats need to be passed
+# dataset_params:
+#   normalization_stats:
+#     topo: {mean: 0.0, std: 1.0, mode: 'standardize'}
+#     uplift_rate: {min: 0.0, max: 1.0, mode: 'minmax'}
+#     k_f: {min: 0.0, max: 1.0, mode: 'minmax'}
+#     k_d: {min: 0.0, max: 1.0, mode: 'minmax'}

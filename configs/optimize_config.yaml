@@ -1,0 +1,67 @@
+# --- Optimization Configuration ---
+run_name: pinn_fastscape_optimize_run # Descriptive name for the optimization run
+output_dir: results # Base directory for saving optimization results
+
+seed: 123 # Random seed
+device: auto # 'auto', 'cuda', 'cpu'
+
+# --- Model & Data ---
+# Parameters of the model architecture (should match the trained model)
+model_params:
+  type: MLP_PINN
+  input_dim: 3
+  output_dim: 1
+  hidden_layers: 6 # Must match the architecture of the loaded checkpoint
+  hidden_neurons: 128
+
+# Path to the checkpoint of the TRAINED PINN model
+trained_checkpoint_path: results/pinn_fastscape_train_run/checkpoints/best_model.pth # Adjust path as needed
+
+# Path to the TARGET observation data (e.g., final topography)
+# This could be real-world data or data from a specific fastscape simulation
+target_data_path: data/processed/test/sim_xxxxx.pt # Example path, replace with actual target data file
+
+# --- Optimization ---
+optimization_params:
+  parameter_to_optimize: uplift_rate # Name of the parameter tensor in the objective function's input dict
+  initialization: constant # Method to initialize the parameter: 'zeros', 'random', 'constant'
+  initial_value: 0.001 # Initial guess value (used for 'constant' or scaling 'random')
+  random_noise_scale: 0.0001 # Scale for 'random' initialization relative to initial_value
+  optimizer: LBFGS # Optimizer to use: LBFGS, Adam, AdamW
+  max_iterations: 100 # Maximum number of optimization iterations
+  learning_rate: 0.1 # Learning rate (can be higher for LBFGS)
+  # --- LBFGS specific parameters ---
+  lbfgs_max_iter: 20 # Max iterations per optimizer.step() call for LBFGS
+  tolerance_grad: 1.0e-7 # Termination tolerance for gradient norm (LBFGS)
+  tolerance_change: 1.0e-9 # Termination tolerance for parameter change (LBFGS)
+  history_size: 10 # LBFGS history size
+  # --- Adam/AdamW specific parameters (if used) ---
+  # betas: [0.9, 0.999]
+  # eps: 1.0e-8
+  # weight_decay: 0.0 # For AdamW
+  # --- Other parameters ---
+  log_interval: 10 # Log progress every N iterations
+  loss_tolerance: 1.0e-9 # Convergence tolerance based on loss change (for non-LBFGS)
+  parameter_regularization_weight: 0.0 # Optional: Weight for L2 regularization on the optimized parameter
+
+# --- Physics Parameters ---
+# These parameters define the forward problem solved by the PINN during optimization.
+# They should generally match the conditions under which the target_data was generated
+# or the conditions assumed during PINN training if different.
+physics_params:
+  # Domain info (should match the target data domain and grid)
+  domain_x: [0.0, 6300.0] # Example: [x_min, x_max]
+  domain_y: [0.0, 6300.0] # Example: [y_min, y_max]
+  total_time: 500000.0 # Time (e.g., years) at which target_topo is observed
+
+  # --- Fixed Parameters for the PDE ---
+  # These are assumed to be known and fixed during the optimization.
+  # If K_f, K_d etc. were also outputs of the PINN or need optimization,
+  # the setup in optimizer_utils needs significant changes.
+  K_f: 1.0e-5 # Stream power erodibility coefficient
+  m: 0.5      # Stream power area exponent
+  n: 1.0      # Stream power slope exponent
+  K_d: 0.01   # Hillslope diffusivity coefficient
+  dx: 100.0   # Grid spacing of the target_topo data
+  dy: 100.0
+  drainage_area_method: placeholder # CRITICAL: Must match method used during training/inference

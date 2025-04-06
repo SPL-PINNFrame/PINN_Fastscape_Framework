@@ -1,0 +1,13 @@
+2025-04-03 18:57:53,027 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\scripts\logs_benchmark\training.log
+2025-04-03 18:57:53,028 [INFO] Using device: cpu
+2025-04-03 18:57:53,028 [INFO] --- Benchmarking Drainage Area (Device: cpu, Runs: 5) ---
+2025-04-03 18:57:53,029 [INFO] Drainage Area Params: {'temp': 0.01, 'num_iters': 50}
+2025-04-03 18:57:53,029 [INFO] Grid Size: 32x32
+2025-04-03 18:57:53,109 [INFO]   Avg Time: 0.0112 +/- 0.0013 seconds
+2025-04-03 18:57:53,110 [INFO] Grid Size: 64x64
+2025-04-03 18:57:53,188 [INFO]   Avg Time: 0.0132 +/- 0.0021 seconds
+2025-04-03 18:57:53,189 [INFO] Grid Size: 128x128
+2025-04-03 18:57:53,279 [INFO]   Avg Time: 0.0146 +/- 0.0012 seconds
+2025-04-03 18:57:53,280 [INFO] Grid Size: 256x256
+2025-04-03 18:57:53,418 [INFO]   Avg Time: 0.0191 +/- 0.0004 seconds
+2025-04-03 18:57:53,420 [INFO] Benchmarking finished.

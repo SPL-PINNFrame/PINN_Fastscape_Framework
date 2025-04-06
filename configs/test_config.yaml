@@ -1,0 +1,92 @@
+# Configuration for model training (scripts/train.py) - TEST VERSION
+
+# General settings
+output_dir: PINN_Fastscape_Framework/results/          # Base directory for saving results
+run_name: pinn_test_run_dry_run   # Specific name for this test run
+seed: 42                      # Random seed for reproducibility
+device: auto                  # 'auto', 'cuda', or 'cpu'
+use_mixed_precision: false    # Enable Automatic Mixed Precision (AMP)
+
+# Data settings
+data:
+  processed_dir: PINN_Fastscape_Framework/data/test_processed # Correct path relative to project root for test data
+  train_split: 0.8            # Proportion of data for training
+  val_split: 0.1              # Proportion of data for validation (test split is inferred)
+  num_workers: 0              # Number of workers for DataLoader (0 for main process)
+
+
+# Data generation settings (for scripts/generate_data.py)
+data_generation:
+  num_samples: 4                # Number of simulation samples to generate (SMALL)
+  output_dir: PINN_Fastscape_Framework/data/test_processed   # Directory to save generated .pt files (TEST DIR)
+  simulation_params:            # Fixed parameters for each simulation run
+    grid_shape: [33, 33]        # Grid dimensions (ny, nx) - SMALL GRID
+    grid_length: [100, 100]     # Grid extent in meters (yl, xl)
+    time_step: 10               # Simulation time step in years
+    run_time: 1000              # Total simulation duration in years (SHORT)
+    boundary_status: fixed_value # Boundary condition type
+    # Add initial topography setup if needed, e.g., 'initial_topo_type': 'random_noise'
+  parameter_ranges:             # Ranges for parameters to be sampled randomly
+    uplift__rate: [5.0e-4, 2.0e-3] # Uplift rate range (m/yr)
+    spl__k_coef: [1.0e-6, 5.0e-6]  # Stream power K coefficient range
+    diffusion__diffusivity: [0.1, 0.5] # Diffusion coefficient range (m^2/yr)
+    spl__area_exp: [0.4, 0.6]      # Stream power area exponent (m) range
+    spl__slope_exp: [1.0, 1.0]     # Stream power slope exponent (n) range (keep fixed at 1.0 for this example)
+
+# Model architecture settings
+model: # Settings for FastscapePINN
+  # Parameters for the internal MLP used in 'predict_coords' mode
+  input_dim: 3                # Input dimension for MLP (x, y, t)
+  output_dim: 1               # Output dimension for MLP (h)
+  hidden_dim: 64              # Hidden dimension for MLP layers (SMALL)
+  num_layers: 3               # Number of layers for MLP (SMALL)
+
+  # Parameters for the Encoder-Decoder used in 'predict_state' mode
+  # These might be implicitly defined in the model architecture,
+  # but grid dimensions are needed.
+  grid_height: 33             # Expected grid height for state prediction input/output (MATCH GRID SHAPE)
+  grid_width: 33              # Expected grid width for state prediction input/output (MATCH GRID SHAPE)
+  # Note: Encoder/Decoder specific layers/channels are defined within the model class itself.
+
+# Physics parameters (used in loss calculation and potentially model dynamics)
+physics_params:
+  m: 0.43                     # Stream power law area exponent
+  n: 1.0                      # Stream power law slope exponent
+  k_d: 0.01                   # Default diffusion coefficient (can be overridden by input data if K_d varies)
+  total_time: 1000            # The total simulation time one model step represents (MATCH RUN TIME)
+
+# Training settings
+training:
+  epochs: 2                   # Total number of training epochs (VERY FEW)
+  batch_size: 2               # Number of samples per batch (SMALL)
+  optimizer: AdamW            # Optimizer type ('Adam', 'AdamW', 'LBFGS' - LBFGS needs care)
+  learning_rate: 1.0e-4       # Initial learning rate
+  weight_decay: 1.0e-5        # Weight decay for regularization
+
+  # Learning rate scheduler (optional)
+  lr_scheduler:
+    name: ReduceLROnPlateau   # 'StepLR', 'ReduceLROnPlateau', etc.
+    # Settings for ReduceLROnPlateau
+    mode: min
+    factor: 0.2
+    patience: 10
+    # Settings for StepLR
+    # step_size: 50
+    # gamma: 0.1
+
+  # Loss weights (adjust these to balance data fitting and physics constraints)
+  loss_weights:
+    data: 1.0                 # Weight for data fidelity loss (e.g., MSE)
+    physics: 0.1              # Weight for physics residual loss
+    conservation: 0.0         # Weight for conservation loss (if implemented)
+    smoothness: 0.001         # Weight for smoothness regularization
+
+  # Optional settings
+  clip_grad_norm: 1.0         # Max norm for gradient clipping (set to null or remove to disable)
+  use_loss_scaling: false     # Enable adaptive loss scaling (placeholder)
+  val_interval: 1             # Run validation every N epochs
+  save_best_only: false       # Only save the checkpoint with the best validation loss (SAVE EVEN IF BAD)
+  run_test_evaluation: false  # Run evaluation on test set after training (requires implementation)
+
+  # Checkpoint loading (optional)
+  load_checkpoint: null       # Path to a checkpoint file to resume training (e.g., results/prev_run/checkpoints/best_model.pth)

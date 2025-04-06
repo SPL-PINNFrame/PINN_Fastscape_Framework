@@ -1,0 +1,92 @@
+# Configuration for AdaptiveFastscapePINN training
+
+# General settings (adapted from test_config.yaml)
+output_dir: PINN_Fastscape_Framework/results/          # Base directory for saving results
+run_name: adaptive_pinn_run_1   # Specific name for this run
+seed: 42                      # Random seed for reproducibility
+device: auto                  # 'auto', 'cuda', or 'cpu'
+use_mixed_precision: false    # Enable Automatic Mixed Precision (AMP)
+
+# Data settings (adapted from test_config.yaml, adjust processed_dir if needed)
+data:
+  processed_dir: PINN_Fastscape_Framework/data/processed # Directory with potentially multi-scale data
+  train_split: 0.8            # Proportion of data for training
+  val_split: 0.1              # Proportion of data for validation
+  num_workers: 0              # Number of workers for DataLoader
+
+# Model architecture settings for AdaptiveFastscapePINN
+model:
+  type: "AdaptiveFastscapePINN"  # Model type selector
+  input_dim: 5                # Input dimension for coordinate MLP (x, y, t, k, u)
+  output_dim: 1               # Output dimension (h)
+  hidden_dim: 256             # Hidden dimension for MLP layers
+  num_layers: 8               # Number of layers for MLP
+  base_resolution: 64         # Processing resolution for CNN components
+  max_resolution: 1024        # Maximum resolution before using tiling
+  # Note: grid_height/width are not needed here as the model is adaptive
+
+# Physics parameters (used in loss calculation)
+physics_params:
+  # Domain info (used for normalizing collocation points if needed)
+  # These should ideally match the physical domain used during data generation
+  domain_x: [0.0, 10000.0]      # Example physical domain extent X (e.g., meters)
+  domain_y: [0.0, 10000.0]      # Example physical domain extent Y (e.g., meters)
+  # Characteristic grid spacing (used for scaling in compute_local_physics)
+  # Should represent a typical dx/dy from the training data or target scale
+  dx: 100.0                   # Example characteristic dx
+  dy: 100.0                   # Example characteristic dy
+  # Stream power law parameters (can be overridden by data if needed)
+  m: 0.5
+  n: 1.0
+  # Diffusion coefficient (can be overridden by data if needed)
+  K_d: 0.01
+  # Total time (used for sampling collocation points in time)
+  total_time: 500000.0        # Example total simulation time
+  # Epsilon for numerical stability
+  epsilon: 1e-10
+  # RBF sigma (if using original compute_pde_residual for comparison/fallback)
+  rbf_sigma: 0.1
+  # Parameters for the local drainage area approximation in compute_local_physics
+  drainage_area_kwargs:
+    # method: "local_approximation" # Implicitly used by the current compute_local_physics
+    slope_weight: 0.8           # Weight for slope-based term
+    position_weight: 0.2        # Weight for position-based term
+    da_slope_clamp_min: 1.0     # Min clamp value for 1/slope term
+    da_slope_clamp_max: 100.0   # Max clamp value for 1/slope term
+    da_pos_exp_factor: 3.0      # Exponential factor for position term
+
+# Training settings
+training:
+  epochs: 100                 # Total number of training epochs
+  batch_size: 8               # Number of samples per batch (potentially smaller due to larger models/data)
+  num_collocation_points: 5000 # Number of collocation points per batch for physics loss
+  optimizer: AdamW            # Optimizer type ('Adam', 'AdamW', 'LBFGS')
+  learning_rate: 1.0e-4       # Initial learning rate
+  weight_decay: 1.0e-5        # Weight decay for regularization
+
+  # Learning rate scheduler (optional)
+  lr_scheduler:
+    name: ReduceLROnPlateau   # 'StepLR', 'ReduceLROnPlateau', etc.
+    mode: min
+    factor: 0.2
+    patience: 10
+    # step_size: 50 # For StepLR
+    # gamma: 0.1    # For StepLR
+
+  # Loss weights (adjust these to balance data fitting and physics constraints)
+  loss_weights:
+    data: 1.0                 # Weight for data fidelity loss (MSE on final state)
+    physics: 0.1              # Weight for physics residual loss (adaptive)
+    conservation: 0.0         # Weight for conservation loss (if implemented)
+    smoothness: 0.01          # Weight for smoothness regularization (on data_pred)
+
+  # Optional settings
+  clip_grad_norm: 1.0         # Max norm for gradient clipping (null to disable)
+  use_loss_scaling: false     # Enable adaptive loss scaling (placeholder)
+  adaptive_weights: false     # Enable dynamic weight adjustment (placeholder)
+  val_interval: 5             # Run validation every N epochs
+  save_best_only: true        # Only save the checkpoint with the best validation loss
+  run_test_evaluation: false  # Run evaluation on test set after training
+
+  # Checkpoint loading (optional)
+  load_checkpoint: null       # Path to a checkpoint file to resume training

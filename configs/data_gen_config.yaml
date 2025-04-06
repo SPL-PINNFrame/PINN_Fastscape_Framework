@@ -1,0 +1,29 @@
+# Configuration for data generation (scripts/generate_data.py)
+
+data_generation:
+  num_samples: 1000             # Number of Fastscape simulations to run
+  output_dir: data/processed  # Where to save the processed .npz/.pt files
+  grid_shape: [64, 64]        # Grid dimensions (height, width) for simulations
+  run_time: 50000             # Simulation time steps or total time for Fastscape
+
+  # Parameter sampling ranges (example: uniform distribution)
+  parameter_ranges:
+    uplift_rate: [0.0001, 0.002] # Min/Max uplift rate (e.g., m/yr)
+    erosion_coeff_K: [1.0e-6, 5.0e-5] # Min/Max erodibility K
+    diffusion_coeff_Kd: [0.001, 0.05] # Min/Max diffusion coefficient Kd
+    # Add ranges for other parameters Fastscape needs (e.g., m, n if varying)
+
+  # Fastscape Wrapper Configuration (Crucial - Needs actual paths/details)
+  fastscape_wrapper:
+    # Option 1: If fastscape is callable via a script in a specific conda env
+    env_path: "gdalenv" # Name of the conda environment (or full path to python executable within it)
+    script_path: "/path/to/your/fastscape/run_script.py" # Path to the script that runs a fastscape simulation
+
+    # Option 2: If fastscape is called via CLI
+    # command_template: "conda activate gdalenv && fastscape --config {config_file}"
+
+    # Path to a base configuration file for Fastscape, if used
+    config_template: "/path/to/your/fastscape_base_config.yaml" # Optional base config
+
+  # Data saving format ('npz' or 'pt')
+  save_format: 'npz'

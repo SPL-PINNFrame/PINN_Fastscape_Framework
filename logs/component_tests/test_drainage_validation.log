@@ -1,0 +1,100 @@
+2025-04-03 18:41:13,537 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 18:41:13,538 [INFO] Starting drainage area validation test...
+2025-04-03 18:41:13,538 [INFO] Creating test topography (65x65)...
+2025-04-03 18:41:13,546 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 18:41:13,546 [INFO] Running validate_drainage_area...
+2025-04-03 18:41:15,124 [INFO] Validation finished.
+2025-04-03 18:41:15,124 [INFO] Validation Results:
+2025-04-03 18:41:15,124 [INFO]   - max_relative_error: NaN
+2025-04-03 18:41:15,125 [INFO]   - mean_relative_error: NaN
+2025-04-03 18:41:15,125 [INFO]   - rmse: NaN
+2025-04-03 18:41:15,125 [INFO]   - correlation_coefficient: NaN
+2025-04-03 18:41:15,125 [INFO]   - river_network_jaccard: 0.0000
+2025-04-03 18:42:41,633 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 18:42:41,633 [INFO] Starting drainage area validation test...
+2025-04-03 18:42:41,634 [INFO] Creating test topography (65x65)...
+2025-04-03 18:42:41,635 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 18:42:41,635 [INFO] Running validate_drainage_area...
+2025-04-03 18:42:43,158 [INFO] Validation finished.
+2025-04-03 18:42:43,158 [INFO] Validation Results:
+2025-04-03 18:42:43,158 [INFO]   - max_relative_error: NaN
+2025-04-03 18:42:43,158 [INFO]   - mean_relative_error: NaN
+2025-04-03 18:42:43,158 [INFO]   - rmse: NaN
+2025-04-03 18:42:43,159 [INFO]   - correlation_coefficient: NaN
+2025-04-03 18:42:43,159 [INFO]   - river_network_jaccard: 0.0000
+2025-04-03 18:43:37,328 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 18:43:37,329 [INFO] Starting drainage area validation test...
+2025-04-03 18:43:37,329 [INFO] Creating test topography (65x65)...
+2025-04-03 18:43:37,330 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 18:43:37,330 [INFO] Running validate_drainage_area...
+2025-04-03 18:43:37,331 [INFO] Current sys.path: ['D:\\OneDrive\\MR.Z  所有资料\\code\\PINN_Fastscape_Framework\\scripts', 'D:\\Software\\Anaconda\\envs\\gdalenv\\python310.zip', 'D:\\Software\\Anaconda\\envs\\gdalenv\\DLLs', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib', 'D:\\Software\\Anaconda\\envs\\gdalenv', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32\\lib', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\Pythonwin', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib\\site-packages', 'D:\\OneDrive\\MR.Z  所有资料\\code\\PINN_Fastscape_Framework']
+2025-04-03 18:43:38,775 [INFO] Validation finished.
+2025-04-03 18:43:38,775 [INFO] Validation Results:
+2025-04-03 18:43:38,775 [INFO]   - max_relative_error: NaN
+2025-04-03 18:43:38,776 [INFO]   - mean_relative_error: NaN
+2025-04-03 18:43:38,776 [INFO]   - rmse: NaN
+2025-04-03 18:43:38,776 [INFO]   - correlation_coefficient: NaN
+2025-04-03 18:43:38,776 [INFO]   - river_network_jaccard: 0.0000
+2025-04-03 18:47:47,101 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 18:47:47,102 [INFO] Starting drainage area validation test...
+2025-04-03 18:47:47,102 [INFO] Creating test topography (65x65)...
+2025-04-03 18:47:47,103 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 18:47:47,103 [INFO] Running validate_drainage_area...
+2025-04-03 18:47:47,104 [INFO] Current sys.path: ['D:\\OneDrive\\MR.Z  所有资料\\code\\PINN_Fastscape_Framework\\scripts', 'D:\\Software\\Anaconda\\envs\\gdalenv\\python310.zip', 'D:\\Software\\Anaconda\\envs\\gdalenv\\DLLs', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib', 'D:\\Software\\Anaconda\\envs\\gdalenv', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32\\lib', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\Pythonwin', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib\\site-packages', 'D:\\OneDrive\\MR.Z  所有资料\\code\\PINN_Fastscape_Framework']
+2025-04-03 18:47:48,572 [INFO] Validation finished.
+2025-04-03 18:47:48,572 [INFO] Validation Results:
+2025-04-03 18:47:48,573 [INFO]   - max_relative_error: NaN
+2025-04-03 18:47:48,573 [INFO]   - mean_relative_error: NaN
+2025-04-03 18:47:48,573 [INFO]   - rmse: NaN
+2025-04-03 18:47:48,573 [INFO]   - correlation_coefficient: NaN
+2025-04-03 18:47:48,573 [INFO]   - river_network_jaccard: 0.0000
+2025-04-03 18:53:13,823 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 18:53:13,824 [INFO] Starting drainage area validation test...
+2025-04-03 18:53:13,824 [INFO] Creating test topography (65x65)...
+2025-04-03 18:53:13,826 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 18:53:13,827 [INFO] Running validate_drainage_area...
+2025-04-03 18:53:13,827 [INFO] Current sys.path: ['D:\\OneDrive\\MR.Z  所有资料\\code', 'D:\\OneDrive\\MR.Z  所有资料\\code\\PINN_Fastscape_Framework\\scripts', 'D:\\Software\\Anaconda\\envs\\gdalenv\\python310.zip', 'D:\\Software\\Anaconda\\envs\\gdalenv\\DLLs', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib', 'D:\\Software\\Anaconda\\envs\\gdalenv', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32\\lib', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\Pythonwin', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib\\site-packages']
+2025-04-03 18:53:15,435 [INFO] Validation finished.
+2025-04-03 18:53:15,435 [INFO] Validation Results:
+2025-04-03 18:53:15,436 [INFO]   - max_relative_error: NaN
+2025-04-03 18:53:15,436 [INFO]   - mean_relative_error: NaN
+2025-04-03 18:53:15,437 [INFO]   - rmse: NaN
+2025-04-03 18:53:15,437 [INFO]   - correlation_coefficient: NaN
+2025-04-03 18:53:15,438 [INFO]   - river_network_jaccard: 0.0000
+2025-04-03 18:56:27,766 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 18:56:27,766 [INFO] Starting drainage area validation test...
+2025-04-03 18:56:27,767 [INFO] Creating test topography (65x65)...
+2025-04-03 18:56:27,768 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 18:56:27,768 [INFO] Running validate_drainage_area...
+2025-04-03 18:56:27,769 [INFO] Current sys.path: ['D:\\OneDrive\\MR.Z  所有资料\\code', 'D:\\OneDrive\\MR.Z  所有资料\\code\\PINN_Fastscape_Framework\\scripts', 'D:\\Software\\Anaconda\\envs\\gdalenv\\python310.zip', 'D:\\Software\\Anaconda\\envs\\gdalenv\\DLLs', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib', 'D:\\Software\\Anaconda\\envs\\gdalenv', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\win32\\lib', 'C:\\Users\\Administrator\\AppData\\Roaming\\Python\\Python310\\site-packages\\Pythonwin', 'D:\\Software\\Anaconda\\envs\\gdalenv\\lib\\site-packages']
+2025-04-03 18:56:29,318 [INFO] Validation finished.
+2025-04-03 18:56:29,319 [INFO] Validation Results:
+2025-04-03 18:56:29,319 [INFO]   - max_relative_error: NaN
+2025-04-03 18:56:29,320 [INFO]   - mean_relative_error: NaN
+2025-04-03 18:56:29,320 [INFO]   - rmse: NaN
+2025-04-03 18:56:29,321 [INFO]   - correlation_coefficient: NaN
+2025-04-03 18:56:29,321 [INFO]   - river_network_jaccard: 0.0000
+2025-04-03 18:57:31,234 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 18:57:31,235 [INFO] Starting drainage area validation test...
+2025-04-03 18:57:31,236 [INFO] Creating test topography (65x65)...
+2025-04-03 18:57:31,237 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 18:57:31,237 [INFO] Running validate_drainage_area...
+2025-04-03 18:57:32,769 [INFO] Validation finished.
+2025-04-03 18:57:32,770 [INFO] Validation Results:
+2025-04-03 18:57:32,770 [INFO]   - max_relative_error: NaN
+2025-04-03 18:57:32,771 [INFO]   - mean_relative_error: NaN
+2025-04-03 18:57:32,771 [INFO]   - rmse: NaN
+2025-04-03 18:57:32,773 [INFO]   - correlation_coefficient: NaN
+2025-04-03 18:57:32,773 [INFO]   - river_network_jaccard: 0.0000
+2025-04-03 19:00:21,325 [INFO] Logging setup complete. Log file: D:\OneDrive\MR.Z  所有资料\code\PINN_Fastscape_Framework\logs\component_tests\test_drainage_validation.log
+2025-04-03 19:00:21,326 [INFO] Starting drainage area validation test...
+2025-04-03 19:00:21,326 [INFO] Creating test topography (65x65)...
+2025-04-03 19:00:21,328 [INFO] Test topography created with shape: torch.Size([1, 1, 65, 65])
+2025-04-03 19:00:21,328 [INFO] Running validate_drainage_area...
+2025-04-03 19:00:22,852 [INFO] Validation finished.
+2025-04-03 19:00:22,852 [INFO] Validation Results:
+2025-04-03 19:00:22,852 [INFO]   - max_relative_error: NaN
+2025-04-03 19:00:22,853 [INFO]   - mean_relative_error: NaN
+2025-04-03 19:00:22,854 [INFO]   - rmse: NaN
+2025-04-03 19:00:22,854 [INFO]   - correlation_coefficient: NaN
+2025-04-03 19:00:22,854 [INFO]   - river_network_jaccard: 0.0000

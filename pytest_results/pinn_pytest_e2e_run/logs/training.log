@@ -1,0 +1,50 @@
+2025-04-04 17:13:51,886 [INFO] Logging setup complete. Log file: pytest_results/pinn_pytest_e2e_run\logs\training.log
+2025-04-04 17:13:51,888 [INFO] Set random seed to 42
+2025-04-04 17:13:51,888 [INFO] Random seed set to 42
+2025-04-04 17:13:51,889 [INFO] Creating dataloaders from: pytest_data/processed
+2025-04-04 17:13:51,889 [INFO] Batch size: 1, Num workers: 0
+2025-04-04 17:13:51,889 [INFO] Train split: 0.5, Validation split: 0.5
+2025-04-04 17:13:51,889 [INFO] Found resolution subdirectories: ['resolution_17x17']. Searching for .pt files within them.
+2025-04-04 17:13:51,889 [INFO] Total files found: 2
+2025-04-04 17:13:51,889 [INFO] Splitting into: Train=1, Validation=1
+2025-04-04 17:13:51,890 [INFO] Computing Min-Max normalization statistics from the training set...
+2025-04-04 17:13:51,901 [INFO] Min-Max stats computed from 1 training files.
+2025-04-04 17:13:51,901 [DEBUG] Computed norm_stats: {'topo': {'min': 0.00028869841480627656, 'max': 1.714142918586731}, 'uplift_rate': {'min': 0.0005083658033981919, 'max': 0.0014979831175878644}, 'k_f': {'min': 1.9999999949504854e-06, 'max': 1.9999999949504854e-06}, 'k_d': {'min': 0.20000000298023224, 'max': 0.20000000298023224}}
+2025-04-04 17:13:51,902 [INFO] Normalization statistics saved to: pytest_results/pinn_pytest_e2e_run/norm_stats.json
+2025-04-04 17:13:51,902 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
+2025-04-04 17:13:51,902 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
+2025-04-04 17:13:51,902 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
+2025-04-04 17:13:51,902 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
+2025-04-04 17:13:51,902 [INFO] Train dataset size: 1
+2025-04-04 17:13:51,902 [INFO] Validation dataset size: 1
+2025-04-04 17:13:51,905 [INFO] Model initialized.
+2025-04-04 17:13:51,905 [INFO] Model has 168,084 trainable parameters.
+2025-04-04 17:13:51,905 [INFO] Using device: cpu
+2025-04-04 17:13:51,905 [INFO] Trainer initialized with AdaptiveFastscapePINN model.
+2025-04-04 17:13:53,157 [INFO] Optimizer: adamw, LR: 0.0001, Weight Decay: 0.0
+2025-04-04 17:13:53,157 [INFO] Using PDE loss method: grid_focused
+2025-04-04 17:13:53,157 [INFO] Initializing DynamicWeightScheduler with weights: {'data': 1.0, 'physics': 0.1, 'conservation': 0.0, 'smoothness': 0.0}
+2025-04-04 17:13:53,157 [INFO] Loss scaling disabled.
+2025-04-04 17:13:53,159 [INFO] Run Name: pinn_pytest_e2e_run
+2025-04-04 17:13:53,159 [INFO] Outputs will be saved to: pytest_results/pinn_pytest_e2e_run
+2025-04-04 17:13:53,159 [INFO] Trainer initialized.
+2025-04-04 17:13:53,159 [INFO] Starting training process...
+2025-04-04 17:13:53,159 [INFO] Starting training from epoch 0 for 1 epochs.
+2025-04-04 17:13:53,161 [ERROR] Epoch 0, Batch 0: Unexpected batch_data type: <class 'str'>. Content: t. Skipping batch.
+2025-04-04 17:13:53,161 [ERROR] Epoch 0, Batch 1: Unexpected batch_data type: <class 'str'>. Content: r. Skipping batch.
+2025-04-04 17:13:53,161 [ERROR] Epoch 0, Batch 2: Unexpected batch_data type: <class 'str'>. Content: a. Skipping batch.
+2025-04-04 17:13:53,161 [ERROR] Epoch 0, Batch 3: Unexpected batch_data type: <class 'str'>. Content: i. Skipping batch.
+2025-04-04 17:13:53,161 [ERROR] Epoch 0, Batch 4: Unexpected batch_data type: <class 'str'>. Content: n. Skipping batch.
+2025-04-04 17:13:53,161 [INFO] Epoch 0 Train Loss: 0.000000
+2025-04-04 17:13:53,161 [ERROR] Epoch 0, Batch 0: Unexpected batch_data type: <class 'str'>. Content: v. Skipping batch.
+2025-04-04 17:13:53,161 [ERROR] Epoch 0, Batch 1: Unexpected batch_data type: <class 'str'>. Content: a. Skipping batch.
+2025-04-04 17:13:53,162 [ERROR] Epoch 0, Batch 2: Unexpected batch_data type: <class 'str'>. Content: l. Skipping batch.
+2025-04-04 17:13:53,162 [INFO] Epoch 0 Val Loss: 0.000000
+2025-04-04 17:13:53,162 [INFO] New best validation loss: 0.000000
+2025-04-04 17:13:53,165 [INFO] Checkpoint saved to pytest_results/pinn_pytest_e2e_run\checkpoints\best_model.pth
+2025-04-04 17:13:53,167 [INFO] Best model checkpoint updated: pytest_results/pinn_pytest_e2e_run\checkpoints\best_model.pth
+2025-04-04 17:13:53,169 [INFO] Checkpoint saved to pytest_results/pinn_pytest_e2e_run\checkpoints\epoch_0000.pth
+2025-04-04 17:13:53,169 [INFO] Epoch 0 completed in 0.01 seconds.
+2025-04-04 17:13:53,169 [INFO] Training finished.
+2025-04-04 17:13:53,169 [INFO] Best Validation Loss: 0.000000
+2025-04-04 17:13:53,169 [INFO] Training process finished.
