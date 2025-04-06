@@ -1,55 +1,55 @@
-2025-04-06 22:43:24,575 [INFO] Logging setup complete. Log file: pytest_results/pinn_pytest_e2e_run\logs\training.log
-2025-04-06 22:43:24,577 [INFO] Set random seed to 42
-2025-04-06 22:43:24,577 [INFO] Random seed set to 42
-2025-04-06 22:43:24,577 [INFO] Creating dataloaders from: pytest_data/processed
-2025-04-06 22:43:24,577 [INFO] Batch size: 1, Num workers: 0
-2025-04-06 22:43:24,577 [INFO] Train split: 0.5, Validation split: 0.5
-2025-04-06 22:43:24,578 [INFO] Found resolution subdirectories: ['resolution_17x17']. Searching for .pt files within them.
-2025-04-06 22:43:24,578 [INFO] Total files found: 2
-2025-04-06 22:43:24,578 [INFO] Splitting into: Train=1, Validation=1
-2025-04-06 22:43:24,578 [INFO] Test files count: 0
-2025-04-06 22:43:24,579 [INFO] Computing Min-Max normalization statistics from the training set...
-2025-04-06 22:43:24,581 [INFO] Min-Max stats computed from 1 training files.
-2025-04-06 22:43:24,581 [DEBUG] Computed norm_stats: {'topo': {'min': 0.0010565443662926555, 'max': 1.6895042657852173}, 'uplift_rate': {'min': 0.0005024274578318, 'max': 0.0014981476124376059}, 'k_f': {'min': 1.9999999949504854e-06, 'max': 1.9999999949504854e-06}, 'k_d': {'min': 0.3982079327106476, 'max': 0.3982079327106476}}
-2025-04-06 22:43:24,581 [INFO] Normalization statistics saved to: pytest_results/pinn_pytest_e2e_run/norm_stats.json
-2025-04-06 22:43:24,582 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
-2025-04-06 22:43:24,582 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
-2025-04-06 22:43:24,582 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
-2025-04-06 22:43:24,582 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
-2025-04-06 22:43:24,582 [WARNING] Received an empty file list for this dataset split.
-2025-04-06 22:43:24,582 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
-2025-04-06 22:43:24,582 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
-2025-04-06 22:43:24,582 [INFO] Train dataset size: 1
-2025-04-06 22:43:24,582 [INFO] Validation dataset size: 1
-2025-04-06 22:43:24,582 [INFO] Test dataset size: 0
-2025-04-06 22:43:24,586 [INFO] Model initialized.
-2025-04-06 22:43:24,586 [INFO] Model has 168,084 trainable parameters.
-2025-04-06 22:43:24,586 [INFO] Using device: cpu
-2025-04-06 22:43:24,587 [INFO] Trainer initialized with AdaptiveFastscapePINN model.
-2025-04-06 22:43:25,854 [INFO] Optimizer: adamw, LR: 0.0001, Weight Decay: 0.0
-2025-04-06 22:43:25,856 [INFO] Using PDE loss method: grid_focused
-2025-04-06 22:43:25,856 [INFO] Initializing DynamicWeightScheduler with weights: {'data': 1.0, 'physics': 0.1, 'conservation': 0.0, 'smoothness': 0.0}
-2025-04-06 22:43:25,856 [INFO] Loss scaling disabled.
-2025-04-06 22:43:25,858 [INFO] Run Name: pinn_pytest_e2e_run
-2025-04-06 22:43:25,858 [INFO] Outputs will be saved to: pytest_results/pinn_pytest_e2e_run
-2025-04-06 22:43:25,858 [INFO] Trainer initialized.
-2025-04-06 22:43:25,859 [INFO] Starting training process...
-2025-04-06 22:43:25,859 [INFO] Starting training from epoch 0 for 1 epochs.
-2025-04-06 22:43:25,866 [DEBUG] Calculating PDE loss using 'grid_focused' method.
-2025-04-06 22:43:25,866 [WARNING] Temporal gradient (dh/dt) is None. This likely means 't_grid' did not influence 'h_grid' in the model's forward pass. Returning zero gradient.
-2025-04-06 22:43:25,883 [ERROR] compute_pde_residual_dual_output currently primarily supports grid mode input (4D tensors). The coordinate point mode relies on compute_local_physics which has known inconsistencies with the main physics module. This path needs review or refactoring.
-2025-04-06 22:43:25,884 [WARNING] Returning zero physics loss for dual_output in coordinate mode due to implementation inconsistencies.
-2025-04-06 22:43:25,884 [DEBUG] Epoch 0 Batch 0 Loss: 0.2697
-2025-04-06 22:43:25,884 [INFO] Epoch 0 Train Loss: 0.269665
-2025-04-06 22:43:25,888 [WARNING] Invalid or non-finite physics_loss_value received (None). Setting physics loss component to zero.
-2025-04-06 22:43:25,890 [WARNING] Invalid or non-finite physics_loss_value received (None). Setting physics loss component to zero.
-2025-04-06 22:43:25,890 [DEBUG] Epoch 0 Batch 0 Loss: 0.2568
-2025-04-06 22:43:25,890 [INFO] Epoch 0 Val Loss: 0.256777
-2025-04-06 22:43:25,890 [INFO] New best validation loss: 0.256777
-2025-04-06 22:43:25,906 [INFO] Checkpoint saved to pytest_results/pinn_pytest_e2e_run\checkpoints\best_model.pth
-2025-04-06 22:43:25,912 [INFO] Best model checkpoint updated: pytest_results/pinn_pytest_e2e_run\checkpoints\best_model.pth
-2025-04-06 22:43:25,919 [INFO] Checkpoint saved to pytest_results/pinn_pytest_e2e_run\checkpoints\epoch_0000.pth
-2025-04-06 22:43:25,919 [INFO] Epoch 0 completed in 0.06 seconds.
-2025-04-06 22:43:25,919 [INFO] Training finished.
-2025-04-06 22:43:25,919 [INFO] Best Validation Loss: 0.256777
-2025-04-06 22:43:25,919 [INFO] Training process finished.
+2025-04-06 23:32:35,771 [INFO] Logging setup complete. Log file: pytest_results/pinn_pytest_e2e_run\logs\training.log
+2025-04-06 23:32:35,773 [INFO] Set random seed to 42
+2025-04-06 23:32:35,773 [INFO] Random seed set to 42
+2025-04-06 23:32:35,773 [INFO] Creating dataloaders from: pytest_data/processed
+2025-04-06 23:32:35,773 [INFO] Batch size: 1, Num workers: 0
+2025-04-06 23:32:35,773 [INFO] Train split: 0.5, Validation split: 0.5
+2025-04-06 23:32:35,773 [INFO] Found resolution subdirectories: ['resolution_17x17']. Searching for .pt files within them.
+2025-04-06 23:32:35,774 [INFO] Total files found: 2
+2025-04-06 23:32:35,774 [INFO] Splitting into: Train=1, Validation=1
+2025-04-06 23:32:35,774 [INFO] Test files count: 0
+2025-04-06 23:32:35,774 [INFO] Computing Min-Max normalization statistics from the training set...
+2025-04-06 23:32:35,777 [INFO] Min-Max stats computed from 1 training files.
+2025-04-06 23:32:35,777 [DEBUG] Computed norm_stats: {'topo': {'min': 0.0052689798176288605, 'max': 1.7029047012329102}, 'uplift_rate': {'min': 0.0005058739334344864, 'max': 0.0014983791625127196}, 'k_f': {'min': 1.9999999949504854e-06, 'max': 1.9999999949504854e-06}, 'k_d': {'min': 0.3634759783744812, 'max': 0.3634759783744812}}
+2025-04-06 23:32:35,777 [INFO] Normalization statistics saved to: pytest_results/pinn_pytest_e2e_run/norm_stats.json
+2025-04-06 23:32:35,778 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
+2025-04-06 23:32:35,778 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
+2025-04-06 23:32:35,778 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
+2025-04-06 23:32:35,778 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
+2025-04-06 23:32:35,778 [WARNING] Received an empty file list for this dataset split.
+2025-04-06 23:32:35,778 [INFO] FastscapeDataset initialized with Min-Max normalization enabled.
+2025-04-06 23:32:35,778 [DEBUG] Normalization stats available for keys: ['topo', 'uplift_rate', 'k_f', 'k_d']
+2025-04-06 23:32:35,778 [INFO] Train dataset size: 1
+2025-04-06 23:32:35,778 [INFO] Validation dataset size: 1
+2025-04-06 23:32:35,778 [INFO] Test dataset size: 0
+2025-04-06 23:32:35,782 [INFO] Model initialized.
+2025-04-06 23:32:35,782 [INFO] Model has 168,084 trainable parameters.
+2025-04-06 23:32:35,782 [INFO] Using device: cpu
+2025-04-06 23:32:35,782 [INFO] Trainer initialized with AdaptiveFastscapePINN model.
+2025-04-06 23:32:37,158 [INFO] Optimizer: adamw, LR: 0.0001, Weight Decay: 0.0
+2025-04-06 23:32:37,159 [INFO] Using PDE loss method: grid_focused
+2025-04-06 23:32:37,159 [INFO] Initializing DynamicWeightScheduler with weights: {'data': 1.0, 'physics': 0.1, 'conservation': 0.0, 'smoothness': 0.0}
+2025-04-06 23:32:37,159 [INFO] Loss scaling disabled.
+2025-04-06 23:32:37,162 [INFO] Run Name: pinn_pytest_e2e_run
+2025-04-06 23:32:37,162 [INFO] Outputs will be saved to: pytest_results/pinn_pytest_e2e_run
+2025-04-06 23:32:37,162 [INFO] Trainer initialized.
+2025-04-06 23:32:37,162 [INFO] Starting training process...
+2025-04-06 23:32:37,163 [INFO] Starting training from epoch 0 for 1 epochs.
+2025-04-06 23:32:37,169 [DEBUG] Calculating PDE loss using 'grid_focused' method.
+2025-04-06 23:32:37,169 [WARNING] Temporal gradient (dh/dt) is None. This likely means 't_grid' did not influence 'h_grid' in the model's forward pass. Returning zero gradient.
+2025-04-06 23:32:37,188 [ERROR] compute_pde_residual_dual_output currently primarily supports grid mode input (4D tensors). The coordinate point mode relies on compute_local_physics which has known inconsistencies with the main physics module. This path needs review or refactoring.
+2025-04-06 23:32:37,188 [WARNING] Returning zero physics loss for dual_output in coordinate mode due to implementation inconsistencies.
+2025-04-06 23:32:37,189 [DEBUG] Epoch 0 Batch 0 Loss: 0.2592
+2025-04-06 23:32:37,190 [INFO] Epoch 0 Train Loss: 0.259179
+2025-04-06 23:32:37,194 [WARNING] Invalid or non-finite physics_loss_value received (None). Setting physics loss component to zero.
+2025-04-06 23:32:37,197 [WARNING] Invalid or non-finite physics_loss_value received (None). Setting physics loss component to zero.
+2025-04-06 23:32:37,197 [DEBUG] Epoch 0 Batch 0 Loss: 0.2503
+2025-04-06 23:32:37,197 [INFO] Epoch 0 Val Loss: 0.250316
+2025-04-06 23:32:37,198 [INFO] New best validation loss: 0.250316
+2025-04-06 23:32:37,214 [INFO] Checkpoint saved to pytest_results/pinn_pytest_e2e_run\checkpoints\best_model.pth
+2025-04-06 23:32:37,219 [INFO] Best model checkpoint updated: pytest_results/pinn_pytest_e2e_run\checkpoints\best_model.pth
+2025-04-06 23:32:37,225 [INFO] Checkpoint saved to pytest_results/pinn_pytest_e2e_run\checkpoints\epoch_0000.pth
+2025-04-06 23:32:37,225 [INFO] Epoch 0 completed in 0.06 seconds.
+2025-04-06 23:32:37,226 [INFO] Training finished.
+2025-04-06 23:32:37,226 [INFO] Best Validation Loss: 0.250316
+2025-04-06 23:32:37,226 [INFO] Training process finished.
