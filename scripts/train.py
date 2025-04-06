@@ -45,8 +45,10 @@ def main(args):
         # Assuming create_dataloaders returns only train and val loaders
         # Pass the full config, as create_dataloaders needs 'training' section for batch_size
         # and 'data' section for processed_dir, splits, etc.
-        train_loader, val_loader = create_dataloaders(config)
-        test_loader = None # Explicitly set test_loader to None
+        dataloaders = create_dataloaders(config) # Get the dictionary
+        train_loader = dataloaders.get('train')
+        val_loader = dataloaders.get('val')
+        test_loader = dataloaders.get('test') # Get the test loader as well
     except ValueError as e:
          logging.error(f"Failed to create dataloaders: {e}")
          sys.exit(1)
@@ -74,8 +76,34 @@ def main(args):
     # Inspecting model constructors: they take specific args, not **kwargs generally
     # We need to filter model_config based on ModelClass.__init__ signature
     # For simplicity now, assume model_config only contains valid args after popping 'name', 'dtype'
+
+    # --- Explicitly add domain_x and domain_y if the model expects them ---
+    # This ensures that interpolated values from the main config are passed correctly.
+    if model_name == 'AdaptiveFastscapePINN':
+        # Check if they exist in the main config (they should due to interpolation)
+        if 'physics_params' in config and 'domain_x' in config['physics_params']:
+            model_config['domain_x'] = config['physics_params']['domain_x']
+        else:
+            logging.warning("Could not find resolved 'physics_params.domain_x' in config for AdaptiveFastscapePINN.")
+        if 'physics_params' in config and 'domain_y' in config['physics_params']:
+            model_config['domain_y'] = config['physics_params']['domain_y']
+        else:
+            logging.warning("Could not find resolved 'physics_params.domain_y' in config for AdaptiveFastscapePINN.")
+        # Remove potentially unresolved keys if they exist from the copy
+        model_config.pop('domain_x', None) # Remove if it was copied as a string "${...}"
+        model_config.pop('domain_y', None) # Remove if it was copied as a string "${...}"
+
+
     # TODO: Implement proper argument filtering based on signature if needed
-    model = ModelClass(**model_config).to(dtype=model_dtype)
+    try:
+        model = ModelClass(**model_config).to(dtype=model_dtype)
+    except TypeError as e:
+        logging.error(f"Error instantiating model '{model_name}' with config {model_config}: {e}")
+        # Log expected arguments vs provided arguments if possible
+        import inspect
+        sig = inspect.signature(ModelClass.__init__)
+        logging.error(f"Expected arguments for {model_name}.__init__: {sig}")
+        sys.exit(1)
     logging.info("Model initialized.")
     # Log model structure or parameter count if desired
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

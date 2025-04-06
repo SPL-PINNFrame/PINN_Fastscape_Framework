@@ -1,3 +1,8 @@
+# NOTE: This file tests the CURRENT, potentially redundant implementation
+# in src/derivatives.py using custom autograd.Function.
+# This module is planned to be removed or replaced by a new implementation.
+# These tests are kept temporarily for regression checking during refactoring.
+
 import torch
 import pytest
 from torch.autograd import gradcheck
@@ -11,6 +16,7 @@ project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+# Import from the potentially redundant module
 from src.derivatives import spatial_gradient, laplacian, SpatialGradientFunction, LaplacianFunction
 
 # --- Test Fixtures ---

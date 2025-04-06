@@ -4,6 +4,12 @@ import logging
 from tqdm import tqdm
 import time
 import numpy as np
+import torch.nn.functional as F # Ensure F is imported if used elsewhere
+import logging
+import torch
+from torch import optim
+# ADDED: Import calculate_laplacian
+from src.physics import calculate_laplacian
 from scipy.interpolate import griddata
 import torch.nn.functional as F
 import os # For save_path
@@ -119,9 +125,10 @@ def interpolate_uplift_torch(uplift_params, param_shape, target_shape, method='r
         
         # 使用grid_sample进行插值
         # align_corners=True is often recommended for resolution changes
+        # Ensure inputs to grid_sample are float32
         values_tgt_grid = torch.nn.functional.grid_sample(
-            param_grid, 
-            grid_sample_coords,
+            param_grid.float(),  # Convert input grid to float
+            grid_sample_coords.float(), # Convert sampling coordinates to float
             mode='bilinear',
             padding_mode='border', # or 'zeros', 'reflection'
             align_corners=True
@@ -302,22 +309,20 @@ class ParameterOptimizer:
 
             # Add spatial smoothness regularization (Laplacian penalty)
             if spatial_smoothness > 0:
-                smoothness_loss_total = 0.0
+                smoothness_loss_total = torch.tensor(0.0, device=self.device, dtype=self.dtype) # Initialize as tensor
                 for name, param in params_to_optimize.items():
-                    # Calculate Laplacian using finite differences (simple version)
-                    # Assumes param is [B, 1, H, W]
-                    laplacian = (
-                        -4 * param
-                        + F.pad(param, (0, 0, 1, -1), mode='replicate')[:, :, :-1, :] # Up
-                        + F.pad(param, (0, 0, -1, 1), mode='replicate')[:, :, 1:, :]  # Down
-                        + F.pad(param, (1, -1, 0, 0), mode='replicate')[:, :, :, :-1] # Left
-                        + F.pad(param, (-1, 1, 0, 0), mode='replicate')[:, :, :, 1:]  # Right
-                    )
+                    # MODIFIED: Use calculate_laplacian function
+                    # Assumes dx=1, dy=1 for simplicity in penalty term,
+                    # or get dx, dy from self.physics_params if available and needed.
+                    # Using dx=1, dy=1 means we penalize the curvature directly.
+                    laplacian = calculate_laplacian(param, dx=1.0, dy=1.0)
+
                     # Penalize the squared magnitude of the Laplacian
                     smoothness_loss = torch.mean(laplacian**2) * spatial_smoothness
-                    smoothness_loss_total += smoothness_loss
+                    smoothness_loss_total = smoothness_loss_total + smoothness_loss # Add tensors
                     loss_components[f'{name}_smoothness_loss'] = smoothness_loss.item()
                 total_loss = total_loss + smoothness_loss_total
+                # Ensure smoothness_loss_total is stored as item if it's still a tensor
                 loss_components['smoothness_loss'] = smoothness_loss_total.item()
 
 

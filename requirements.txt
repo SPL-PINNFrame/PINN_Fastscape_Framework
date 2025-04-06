@@ -1,17 +1,10 @@
-torch
-numpy
-pyyaml
-tqdm
-xarray
-xsimlab
-fastscape # Crucial dependency for data generation
-tensorboard # Needed by trainer for logging
+# Core dependencies are now managed by environment.yml (Conda)
 
-# Development/Testing Dependencies (Optional but recommended)
+# Development/Testing Dependencies (Install via pip after creating Conda env)
 pytest
 pytest-mock
 
-# Other potential dependencies (uncomment if needed)
+# Other potential dependencies (uncomment if needed and not available via Conda)
 # scipy
 # matplotlib # For visualization
 # netcdf4 # If fastscape outputs netcdf

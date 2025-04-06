@@ -204,23 +204,6 @@ def create_dataloaders(config):
                   logging.error(f"First item keys: {batch[0].keys() if isinstance(batch[0], dict) else 'Not a dict'}")
              return None
     """Creates train, validation, and test dataloaders with normalization handling."""
-
-    # --- Define collate_fn first ---
-    def collate_fn_filter_none(batch):
-        """Custom collate_fn that filters out None results from __getitem__."""
-        batch = list(filter(lambda x: x is not None, batch))
-        if not batch:
-             return None # Return None if the whole batch failed
-        try:
-             # Use default collate to combine samples into a batch
-             return torch.utils.data.dataloader.default_collate(batch)
-        except Exception as e:
-             logging.error(f"Error during default_collate: {e}. Batch content structure might be inconsistent.")
-             # Log details about the batch structure if possible
-             if batch:
-                  logging.error(f"First item keys: {batch[0].keys() if isinstance(batch[0], dict) else 'Not a dict'}")
-             return None
-    """Creates train, validation, and test dataloaders with normalization handling."""
     data_config = config.get('data', {})
     norm_config = data_config.get('normalization', {})
     train_config = config.get('training', {})
@@ -230,7 +213,7 @@ def create_dataloaders(config):
     num_workers = data_config.get('num_workers', 0)
     train_split = data_config.get('train_split', 0.8)
     val_split = data_config.get('val_split', 0.1)
-    # test_split = 1.0 - train_split - val_split # Calculate test split
+    test_split = 1.0 - train_split - val_split # Calculate test split
 
     logging.info(f"Creating dataloaders from: {data_dir}")
     logging.info(f"Batch size: {batch_size}, Num workers: {num_workers}")
@@ -270,15 +253,15 @@ def create_dataloaders(config):
         num_val = 1
     # Adjust train count if validation took the last sample(s)
     num_train = min(num_train, num_total - num_val)
-    # num_test = num_total - num_train - num_val
+    num_test = num_total - num_train - num_val
 
     train_files = all_files[:num_train]
     val_files = all_files[num_train : num_train + num_val]
-    # test_files = all_files[num_train + num_val:] # Files remaining for test set
+    test_files = all_files[num_train + num_val:] # Files remaining for test set
 
     logging.info(f"Total files found: {num_total}")
     logging.info(f"Splitting into: Train={len(train_files)}, Validation={len(val_files)}")
-    # logging.info(f"Test files count: {len(test_files)}")
+    logging.info(f"Test files count: {len(test_files)}")
 
     # --- Normalization Handling (Min-Max) ---
     normalize_data = norm_config.get('enabled', False)
@@ -375,7 +358,7 @@ def create_dataloaders(config):
     # Pass normalize flag and computed/loaded norm_stats to the datasets
     train_dataset = FastscapeDataset(train_files, normalize=normalize_data, norm_stats=norm_stats)
     val_dataset = FastscapeDataset(val_files, normalize=normalize_data, norm_stats=norm_stats)
-    # test_dataset = FastscapeDataset(test_files, normalize=normalize_data, norm_stats=norm_stats)
+    test_dataset = FastscapeDataset(test_files, normalize=normalize_data, norm_stats=norm_stats)
 
 
     train_loader = DataLoader(
@@ -396,22 +379,23 @@ def create_dataloaders(config):
         collate_fn=collate_fn_filter_none,
         persistent_workers=num_workers > 0
     )
-    # test_loader = DataLoader(
-    #     test_dataset,
-    #     batch_size=batch_size,
-    #     shuffle=False,
-    #     num_workers=num_workers,
-    #     pin_memory=True,
-    #     collate_fn=collate_fn_filter_none,
-    #     persistent_workers=num_workers > 0
-    # )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        collate_fn=collate_fn_filter_none,
+        persistent_workers=num_workers > 0
+    )
 
     logging.info(f"Train dataset size: {len(train_dataset)}")
     logging.info(f"Validation dataset size: {len(val_dataset)}")
-    # logging.info(f"Test dataset size: {len(test_dataset)}")
+    logging.info(f"Test dataset size: {len(test_dataset)}")
 
     # Return only train and val loaders for now, consistent with train.py usage
-    return {'train': train_loader, 'val': val_loader} #, 'test': test_loader} # Return a dictionary
+    # MODIFIED: Return all three loaders
+    return {'train': train_loader, 'val': val_loader, 'test': test_loader} # Return a dictionary
 
 
 if __name__ == '__main__':

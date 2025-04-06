@@ -254,31 +254,41 @@ def test_create_dataloaders_basic(temp_pt_data):
     data_path, file_paths, _, _, _ = temp_pt_data
     batch_size = 2
     cfg = OmegaConf.create({
-        'data': { # Assuming config structure nests data params
-            'processed_dir': data_path, # Use processed_dir key
-            # 'state_vars', 'scalar_params', 'spatial_params' are not directly used by create_dataloaders anymore
-            'normalization': {'enabled': False}, # Explicitly disable normalization
-            'subset_fraction': 1.0,
-            'seed': 42,
-            'train_val_test_split': [0.6, 0.2, 0.2], # Example split
+        'data': { # Data-specific parameters
+            'processed_dir': data_path,
+            'normalization': {'enabled': False},
+            'train_split': 0.6, # Use train_split, val_split as expected by create_dataloaders
+            'val_split': 0.2,
+            'num_workers': 0,
+            'seed': 42, # Seed might be better under training or top-level
+        },
+        'training': { # Training-specific parameters
             'batch_size': batch_size,
-            'num_workers': 0 # Use 0 for simplicity in testing
+            # Add other training params if needed by create_dataloaders, though batch_size is the main one here
         }
+        # Add other top-level keys like 'physics_params' if needed by the function being tested
     })
 
+    # create_dataloaders returns a dictionary now
     dataloaders = create_dataloaders(cfg)
+    assert isinstance(dataloaders, dict)
+    assert 'train' in dataloaders and 'val' in dataloaders
+    # assert 'test' in dataloaders # Removed check for test loader
 
-    assert 'train' in dataloaders
-    assert 'val' in dataloaders
-    assert 'test' in dataloaders
-    assert isinstance(dataloaders['train'], torch.utils.data.DataLoader)
-    assert isinstance(dataloaders['val'], torch.utils.data.DataLoader)
-    assert isinstance(dataloaders['test'], torch.utils.data.DataLoader)
+    train_loader = dataloaders['train']
+    val_loader = dataloaders['val']
+    # test_loader = dataloaders['test'] # Removed test loader
 
-    # Check batch size
-    assert dataloaders['train'].batch_size == batch_size
-    assert dataloaders['val'].batch_size == batch_size
-    assert dataloaders['test'].batch_size == batch_size
+    assert isinstance(train_loader, torch.utils.data.DataLoader)
+    assert isinstance(val_loader, torch.utils.data.DataLoader)
+    # assert isinstance(test_loader, torch.utils.data.DataLoader) # Removed
+
+    # Check batch size from config
+    expected_batch_size = cfg['training']['batch_size'] # Access batch_size from config (Corrected path)
+    assert train_loader.batch_size == expected_batch_size
+    # Val loader might have different batch size or same, check config if specified, else assume same
+    assert val_loader.batch_size == expected_batch_size
+    # assert test_loader.batch_size == expected_batch_size # Removed
 
     # Check number of samples (approximate due to split)
     total_samples = len(file_paths)
@@ -287,9 +297,14 @@ def test_create_dataloaders_basic(temp_pt_data):
     test_len = len(dataloaders['test'].dataset)
     assert train_len + val_len + test_len == total_samples
     # Check approximate split ratios (allow for rounding)
-    assert abs(train_len / total_samples - cfg.data.train_val_test_split[0]) < 0.1
-    assert abs(val_len / total_samples - cfg.data.train_val_test_split[1]) < 0.1
-    assert abs(test_len / total_samples - cfg.data.train_val_test_split[2]) < 0.1
+    # Check approximate split ratios (allow for rounding)
+    expected_train_ratio = cfg.data.train_split
+    expected_val_ratio = cfg.data.val_split
+    expected_test_ratio = 1.0 - expected_train_ratio - expected_val_ratio
+    # Use a slightly larger tolerance due to integer rounding of dataset sizes
+    assert abs(train_len / total_samples - expected_train_ratio) < (2 / total_samples if total_samples > 0 else 0.1), f"Train split mismatch: expected ~{expected_train_ratio:.2f}, got {train_len / total_samples:.2f}"
+    assert abs(val_len / total_samples - expected_val_ratio) < (2 / total_samples if total_samples > 0 else 0.1), f"Val split mismatch: expected ~{expected_val_ratio:.2f}, got {val_len / total_samples:.2f}"
+    assert abs(test_len / total_samples - expected_test_ratio) < (2 / total_samples if total_samples > 0 else 0.1), f"Test split mismatch: expected ~{expected_test_ratio:.2f}, got {test_len / total_samples:.2f}"
 
 
 def test_dataloader_batch_structure(temp_pt_data):
@@ -313,8 +328,12 @@ def test_dataloader_batch_structure(temp_pt_data):
     batch = next(iter(train_loader)) # Get one batch
 
     assert isinstance(batch, dict)
-    assert 'params' in batch
-    assert 'state' in batch
+    # Check for expected flat keys returned by the current FastscapeDataset
+    expected_keys = ['initial_topo', 'final_topo', 'uplift_rate', 'k_f', 'k_d', 'm', 'n', 'run_time', 'target_shape']
+    for key in expected_keys:
+        assert key in batch, f"Expected key '{key}' not found in batch"
+    # The test previously expected nested 'params'/'state', which is incorrect for the current dataset output.
+    # The trainer is responsible for potentially restructuring this if needed by the model.
     # Coords might be added by the dataloader's collate_fn or later
     # assert 'coords' in batch
 

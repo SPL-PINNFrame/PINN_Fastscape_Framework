@@ -53,7 +53,7 @@ data_generation:
 # Model architecture settings
 model:
   name: AdaptiveFastscapePINN # Specify the model type to load
-  input_dim: 3
+  # input_dim: 3 # Removed duplicate key, the correct one (5) is defined below
   output_dim: 1
   hidden_dim: 16 # Very small MLP
   num_layers: 2
@@ -64,10 +64,14 @@ model:
   # Ensure other model params match the chosen model's __init__ signature
   # For AdaptiveFastscapePINN, input_dim is likely fixed (e.g., 5 for x,y,t,k,u)
   input_dim: 5
+  domain_x: ${physics_params.domain_x} # Link to physics params
+  domain_y: ${physics_params.domain_y} # Link to physics params
 
 # Physics parameters
 physics_params:
   # Parameters used by the physics equations
+  K_f: 1.0e-5 # Stream power erodibility (default value)
+  K_d: 0.01   # Hillslope diffusivity (default value)
   m: 0.5 # spl__area_exp
   n: 1.0 # spl__slope_exp
   # k_d: 0.01 # diffusion__diffusivity - Provided by data generation config
@@ -76,8 +80,8 @@ physics_params:
 
   # Parameters needed for calculations (grid spacing, domain size)
   # Calculate dx, dy based on domain size and grid shape
-  dx: 100.0 / (17 - 1) # domain_size_x / (width - 1)
-  dy: 100.0 / (17 - 1) # domain_size_y / (height - 1)
+  dx: 6.25 # Pre-calculated: 100.0 / (17 - 1)
+  dy: 6.25 # Pre-calculated: 100.0 / (17 - 1)
   domain_x: [0.0, 100.0] # Corresponds to grid_length[1]
   domain_y: [0.0, 100.0] # Corresponds to grid_length[0]
   grid_height: 17 # Explicitly provide grid dimensions needed by some loss functions

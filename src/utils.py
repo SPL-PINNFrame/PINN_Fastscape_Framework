@@ -4,6 +4,7 @@ import random
 import numpy as np
 import torch
 import yaml
+from omegaconf import OmegaConf # Import OmegaConf
 
 def setup_logging(log_dir, log_filename="training.log"):
     """Sets up logging to file and console."""
@@ -96,8 +97,14 @@ def load_config(config_path):
     """Loads a YAML configuration file."""
     try:
         with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        logging.info(f"Loaded configuration from {config_path}")
+            # config = yaml.safe_load(f) # Replace yaml.safe_load
+            # Use OmegaConf to load and resolve interpolations/calculations
+            config = OmegaConf.load(f)
+            # Optionally resolve interpolations immediately if needed,
+            # though often resolution happens implicitly on access.
+            # OmegaConf.resolve(config) # Uncomment if explicit resolution is required
+        logging.info(f"Loaded configuration from {config_path} using OmegaConf")
+        # Return the OmegaConf object (or convert back to dict if necessary, but OmegaConf object is often preferred)
         return config
     except FileNotFoundError:
         logging.error(f"Configuration file not found: {config_path}")

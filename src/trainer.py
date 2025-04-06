@@ -12,12 +12,12 @@ import random # For collocation point sampling
 # Import specific model types and loss functions
 from .models import FastscapePINN, AdaptiveFastscapePINN, MLP_PINN # Add AdaptiveFastscapePINN
 # Import all relevant loss functions
+# Import relevant loss functions, excluding the removed adaptive one
 from .losses import (
     compute_total_loss,
     compute_pde_residual,
-    compute_pde_residual_adaptive,
-    compute_pde_residual_grid_focused, # Import the new grid-focused loss
-    compute_pde_residual_dual_output # Import the dual output loss function
+    compute_pde_residual_grid_focused,
+    compute_pde_residual_dual_output
 )
 from .utils import set_seed, get_device # Assuming utils.py has these
 
@@ -127,7 +127,8 @@ class PINNTrainer:
         self.n_collocation = self.train_config.get('n_collocation_points', 10000)
         # --- PDE Loss Method Selection ---
         self.pde_loss_method = self.train_config.get('pde_loss_method', 'grid_focused').lower()
-        if self.pde_loss_method not in ['grid_focused', 'interpolation', 'adaptive']:
+        # MODIFIED: Add 'dual_output' to the list of valid methods
+        if self.pde_loss_method not in ['grid_focused', 'interpolation', 'adaptive', 'dual_output']:
              logging.warning(f"Invalid pde_loss_method '{self.pde_loss_method}'. Defaulting to 'grid_focused'.")
              self.pde_loss_method = 'grid_focused'
         logging.info(f"Using PDE loss method: {self.pde_loss_method}")
@@ -267,49 +268,70 @@ class PINNTrainer:
                             logging.error(f"Error during model forward pass (predict_state): {e}", exc_info=True)
                             return torch.tensor(float('nan'), device=self.device)
 
-                        # 2. Calculate Physics Loss (PDE Residual)
+                        # 2. Calculate Physics Loss (PDE Residual) based on configuration
                         physics_loss = None
-                        collocation_pred = None
-                        collocation_coords = None
-
                         if use_physics_loss:
                             try:
-                                # --- Physics Loss Calculation using Dual Output Model ---
-                                # 2.1 Generate collocation points
-                                collocation_coords = self._generate_collocation_points(self.n_collocation)
+                                # --- Select PDE Loss Calculation Method ---
+                                if self.pde_loss_method == 'grid_focused':
+                                    # Requires model prediction 'data_pred' (grid) and 't_grid'
+                                    t_grid = data_inputs.get('run_time') # Assuming run_time corresponds to the grid time
+                                    if t_grid is None:
+                                        logging.warning("Missing 'run_time' in batch for grid_focused PDE loss. Using default total_time.")
+                                        t_grid = torch.tensor(self.total_time, device=self.device, dtype=data_pred.dtype)
+                                    # Ensure tensors require grad for autograd inside loss function
+                                    if not t_grid.requires_grad: t_grid.requires_grad_(True)
+                                    if not data_pred.requires_grad: data_pred.requires_grad_(True)
 
-                                # 2.2 Add parameter grids (if available in data) for sampling
-                                model_input_coords = collocation_coords.copy()
-                                k_grid = data_inputs.get('k_f') # Use k_f from data as k_grid
-                                u_grid = data_inputs.get('uplift_rate') # Use uplift_rate as u_grid
-                                model_input_coords['k_grid'] = k_grid # Pass even if None, handled in model
-                                model_input_coords['u_grid'] = u_grid
+                                    logging.debug("Calculating PDE loss using 'grid_focused' method.")
+                                    # WARNING: This method uses autograd.grad for dh/dt internally, potential gradient flow issues.
+                                    physics_loss = compute_pde_residual_grid_focused(
+                                        h_pred_grid=data_pred, # Use the state prediction grid from step 1
+                                        t_grid=t_grid,
+                                        physics_params=self.physics_params
+                                    )
 
-                                # 2.3 Get model predictions (state and derivative) at collocation points
-                                # Ensure model outputs both state and derivative for physics loss
-                                self.model.set_output_mode(state=True, derivative=True)
-                                collocation_outputs = self.model(model_input_coords, mode='predict_coords')
-                                # Reset model output mode if needed (e.g., if only state needed elsewhere)
-                                # self.model.set_output_mode(state=True, derivative=False) # Example
+                                elif self.pde_loss_method == 'dual_output':
+                                    logging.debug("Calculating PDE loss using 'dual_output' method.")
+                                    # This method relies on the model providing both state and derivative.
+                                    # We already have model_outputs_state from step 1.
+                                    if isinstance(model_outputs_state, dict) and 'state' in model_outputs_state and 'derivative' in model_outputs_state:
+                                        logging.debug("Using dual output from predict_state mode (grid).")
+                                        # Ensure requires_grad is set on outputs if needed by loss function
+                                        if not model_outputs_state['state'].requires_grad: model_outputs_state['state'].requires_grad_(True)
+                                        if not model_outputs_state['derivative'].requires_grad: model_outputs_state['derivative'].requires_grad_(True)
+                                        physics_loss = compute_pde_residual_dual_output(
+                                            outputs=model_outputs_state, # Pass the dict from predict_state
+                                            physics_params=self.physics_params # Assumes grid mode, no coords needed here
+                                        )
+                                    else:
+                                        # Fallback or error if model didn't provide dual output in predict_state
+                                        logging.error(f"Model type {type(self.model)} did not return dual output ('state' and 'derivative') dict in 'predict_state' mode, but 'dual_output' PDE loss method was selected. Cannot compute physics loss.")
+                                        physics_loss = None # Or raise error
 
-                                if not isinstance(collocation_outputs, dict) or 'state' not in collocation_outputs or 'derivative' not in collocation_outputs:
-                                     logging.error(f"Model did not return expected dictionary with 'state' and 'derivative' in predict_coords mode for physics loss.")
-                                     physics_loss = None
+                                elif self.pde_loss_method == 'interpolation':
+                                    logging.debug("Calculating PDE loss using 'interpolation' method.")
+                                    # Requires collocation points and model prediction at those points
+                                    collocation_coords = self._generate_collocation_points(self.n_collocation)
+                                    # Need model prediction (state only) at these points
+                                    self.model.set_output_mode(state=True, derivative=False) # Ensure only state is predicted
+                                    h_pred_collocation = self.model(collocation_coords, mode='predict_coords')
+                                    if not h_pred_collocation.requires_grad: h_pred_collocation.requires_grad_(True)
+
+                                    # WARNING: This method uses autograd.grad for dh/dt internally, potential gradient flow issues.
+                                    physics_loss = compute_pde_residual(
+                                        h_pred=h_pred_collocation,
+                                        coords=collocation_coords,
+                                        physics_params=self.physics_params
+                                    )
+
+                                # Removed 'adaptive' option as the corresponding loss function was removed.
                                 else:
-                                     # 2.4 Calculate PDE residual using the dual output loss function
-                                     # Pass collocation_coords in physics_params if needed by compute_local_physics
-                                     physics_params_with_coords = self.physics_params.copy()
-                                     physics_params_with_coords['coords'] = collocation_coords
-                                     physics_params_with_coords['k_grid'] = k_grid # Pass grids too
-                                     physics_params_with_coords['u_grid'] = u_grid
-
-                                     physics_loss = compute_pde_residual_dual_output(
-                                         outputs=collocation_outputs,
-                                         physics_params=physics_params_with_coords
-                                     )
+                                    logging.warning(f"Unknown pde_loss_method: '{self.pde_loss_method}'. Skipping physics loss calculation.")
+                                    physics_loss = None
 
                             except Exception as e:
-                                 logging.error(f"Error calculating physics loss (dual output method): {e}", exc_info=True)
+                                 logging.error(f"Error calculating physics loss using method '{self.pde_loss_method}': {e}", exc_info=True)
                                  physics_loss = None # Ensure it's None if calculation fails
 
                         # 3. Compute Total Loss
@@ -421,7 +443,9 @@ class PINNTrainer:
                                 self.model.set_output_mode(state=True, derivative=True)
                                 collocation_outputs_log = self.model(model_input_coords_log, mode='predict_coords')
                                 if isinstance(collocation_outputs_log, dict) and 'state' in collocation_outputs_log and 'derivative' in collocation_outputs_log:
-                                     physics_params_with_coords_log = self.physics_params.copy()
+                                     # Ensure we start with a standard dict if self.physics_params might be OmegaConf or other complex type
+                                     base_physics_params_log = dict(self.physics_params) if hasattr(self.physics_params, 'items') else {}
+                                     physics_params_with_coords_log = base_physics_params_log.copy()
                                      physics_params_with_coords_log['coords'] = collocation_coords_log
                                      physics_params_with_coords_log['k_grid'] = k_grid_log
                                      physics_params_with_coords_log['u_grid'] = u_grid_log
@@ -434,11 +458,15 @@ class PINNTrainer:
                                 physics_loss_log = None # Set to None if recomputation fails
 
                       if data_pred_no_grad_state is not None:
+                           # Create a standard dict copy for logging, ensuring no problematic tensors like 'coords' are included
+                           physics_params_log = {k: v for k, v in self.physics_params.items() if not isinstance(v, torch.Tensor)} if isinstance(self.physics_params, dict) else {}
                            _, loss_components_log = compute_total_loss(
                                 data_pred=data_pred_no_grad_state, final_topo=final_topo, # Use final_topo from outer scope
                                 physics_loss_value=physics_loss_log, # Use recomputed physics loss
-                                physics_params=self.physics_params, loss_weights=current_loss_weights
+                                physics_params=physics_params_log, # Use correct keyword 'physics_params' but pass the filtered dict
+                                loss_weights=current_loss_weights
                            )
+                           # Removed duplicated/erroneous lines from previous diff
                       else:
                            loss_components_log = {}
 
@@ -546,12 +574,23 @@ class PINNTrainer:
 
     def save_checkpoint(self, epoch, filename, is_best=False):
         """Saves model checkpoint."""
+        # Ensure config is resolved and converted to a standard dict before saving
+        from omegaconf import OmegaConf, DictConfig
+        if isinstance(self.config, DictConfig):
+            resolved_config = OmegaConf.to_container(self.config, resolve=True, throw_on_missing=False)
+        elif isinstance(self.config, dict):
+             # If it's already a dict, assume it's fine (or add resolution logic if needed)
+             resolved_config = self.config
+        else:
+             logging.warning(f"Unexpected config type in save_checkpoint: {type(self.config)}. Saving as is.")
+             resolved_config = self.config
+
         state = {
             'epoch': epoch + 1,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'best_val_loss': self.best_val_loss,
-            'config': self.config # Save config for reproducibility
+            'config': resolved_config # Save the resolved standard dict
         }
         if self.scheduler:
             state['scheduler_state_dict'] = self.scheduler.state_dict()
@@ -578,7 +617,7 @@ class PINNTrainer:
             return
 
         try:
-            checkpoint = torch.load(filepath, map_location=self.device)
+            checkpoint = torch.load(filepath, map_location=self.device, weights_only=False) # Explicitly set weights_only to suppress warning
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.start_epoch = checkpoint.get('epoch', 0) # Use get with default

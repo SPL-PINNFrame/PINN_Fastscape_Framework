@@ -1,0 +1,23 @@
+name: pinn-fastscape-env # 你可以修改环境名称
+channels:
+  - pytorch # For PyTorch
+  - conda-forge # For fastscape and others
+  - defaults
+dependencies:
+  - python=3.10 # 建议指定一个 Python 版本 (例如 3.10)
+  - pip # 确保 pip 可用
+  - pytorch # 让 Conda 处理 PyTorch 安装 (CPU/GPU)
+  - cpuonly # 默认安装 CPU 版本的 PyTorch，如果需要 GPU 版本请修改或移除此行
+  # - pytorch-cuda=11.8 # GPU 用户请取消注释并根据你的 CUDA 版本修改
+  - numpy
+  - pyyaml
+  - tqdm
+  - xarray
+  - xsimlab
+  - fastscape # Conda 会处理 fastscape 及其 Fortran 依赖
+  - tensorboard
+  # Pip-installed dependencies (开发工具或 Conda 中不易获取的包)
+  - pip:
+    - pytest
+    - pytest-mock
+    # 如果有其他只能通过 pip 安装的依赖，请添加到这里

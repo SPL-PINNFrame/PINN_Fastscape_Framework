@@ -11,8 +11,11 @@ def get_sobel_kernels(dx, dy):
     """Gets Sobel kernels for gradient calculation."""
     # Sobel kernels for d/dx and d/dy
     # Note the scaling by 1/(8*dx) or 1/(8*dy) as in TerrainDerivatives.f90
-    kernel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32) / (8.0 * dx)
-    kernel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32) / (8.0 * dy)
+    # Ensure dx and dy are floats before using them in calculations
+    dx_float = float(dx)
+    dy_float = float(dy)
+    kernel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32) / (8.0 * dx_float)
+    kernel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32) / (8.0 * dy_float)
     # Reshape for Conv2d: (out_channels, in_channels, height, width)
     kernel_x = kernel_x.view(1, 1, 3, 3)
     kernel_y = kernel_y.view(1, 1, 3, 3)
@@ -34,8 +37,9 @@ def calculate_slope_magnitude(h, dx, dy, padding_mode='replicate'):
                       Note: This is the magnitude |∇h|, not atan(|∇h|).
     """
     kernel_x, kernel_y = get_sobel_kernels(dx, dy)
-    kernel_x = kernel_x.to(h.device)
-    kernel_y = kernel_y.to(h.device)
+    # Ensure kernel dtype matches input tensor h's dtype
+    kernel_x = kernel_x.to(device=h.device, dtype=h.dtype)
+    kernel_y = kernel_y.to(device=h.device, dtype=h.dtype)
 
     # Calculate gradients using convolution
     # padding='same' requires PyTorch 1.9+ and ensures output size matches input size
@@ -198,7 +202,7 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
     if verbose: # Only print if verbose is True
         print(f"Using simplified iterative flow accumulation ({num_iters} iterations).")
     # Reduce iterations for potential speedup and stability
-    num_iters = min(num_iters, 5) if num_iters > 5 else num_iters
+    # num_iters = min(num_iters, 5) if num_iters > 5 else num_iters # Limit removed
     for _ in range(num_iters):
         inflow = torch.zeros_like(drainage_area)
         # Pad current drainage area to access neighbor values easily
@@ -294,13 +298,10 @@ def calculate_dhdt_physics(h, U, K_f, m, n, K_d, dx, dy, precip=1.0, padding_mod
     Returns:
         torch.Tensor: The calculated dh/dt based on physics.
     """
-    # Import custom derivatives
-    from .derivatives import spatial_gradient, laplacian
+    # Removed import from .derivatives
 
-    # Calculate components using custom derivatives
-    dh_dx = spatial_gradient(h, dim=1, spacing=dx)
-    dh_dy = spatial_gradient(h, dim=0, spacing=dy)
-    slope_mag = torch.sqrt(dh_dx**2 + dh_dy**2 + 1e-10) # Epsilon for stability
+    # Calculate slope magnitude using the function defined in this file
+    slope_mag = calculate_slope_magnitude(h, dx, dy, padding_mode=padding_mode)
 
     # Use the optimized drainage area function
     da_params = da_optimize_params if da_optimize_params is not None else {}
@@ -308,8 +309,8 @@ def calculate_dhdt_physics(h, U, K_f, m, n, K_d, dx, dy, precip=1.0, padding_mod
 
     erosion_rate = stream_power_erosion(h, drainage_area, slope_mag, K_f, m, n)
 
-    # Calculate diffusion using custom laplacian
-    laplacian_h = laplacian(h, dx, dy)
+    # Calculate diffusion using the laplacian function defined in this file
+    laplacian_h = calculate_laplacian(h, dx, dy, padding_mode=padding_mode)
     diffusion_rate = K_d * laplacian_h
 
     # Combine terms

@@ -1,4 +1,6 @@
 # PINN_Fastscape_Framework/setup_environment.py
+# NOTE: This script is now primarily for informational purposes.
+# Environment setup should be done using Conda and the environment.yml file.
 
 import os
 import subprocess
@@ -10,23 +12,19 @@ def run_command(command, cwd=None, check=True):
     print(f"\nExecuting command: {' '.join(command)}")
     print(f"Working directory: {cwd or os.getcwd()}")
     try:
-        # Use shell=True cautiously, especially on non-Windows for complex commands or variable expansion.
-        # For basic pip commands, it's often needed on Windows.
         use_shell = platform.system() == "Windows"
         process = subprocess.run(
             command,
             cwd=cwd,
-            check=check, # Raise exception on non-zero exit code if True
+            check=check,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            encoding='utf-8', # Specify encoding
+            encoding='utf-8',
             shell=use_shell
         )
-        # Print stdout only if it contains non-whitespace characters
         if process.stdout and process.stdout.strip():
             print("Output:\n", process.stdout)
-        # Print stderr only if it contains non-whitespace characters
         if process.stderr and process.stderr.strip():
             print("Error output:\n", process.stderr)
 
@@ -48,65 +46,53 @@ def run_command(command, cwd=None, check=True):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         import traceback
-        traceback.print_exc() # Print full traceback for unexpected errors
+        traceback.print_exc()
         return False
 
 def main():
-    """Main function to setup the environment."""
-    # Use absolute path for project root based on this script's location
+    """Main function to guide environment setup using Conda."""
     project_root = os.path.dirname(os.path.abspath(__file__))
-    fortran_lib_path = os.path.join(project_root, 'external', 'fastscapelib-fortran')
-    requirements_path = os.path.join(project_root, 'requirements.txt')
+    env_file_path = os.path.join(project_root, 'environment.yml')
+    requirements_path = os.path.join(project_root, 'requirements.txt') # For dev tools
 
-    print("--- Starting Environment Setup for PINN Fastscape Framework ---")
-    print(f"Project Root: {project_root}")
+    print("--- Environment Setup Guide for PINN Fastscape Framework ---")
+    print("\nIMPORTANT: Environment setup is now managed using Conda.")
+    print("Please ensure you have Anaconda or Miniconda installed.")
 
-    # 1. Check for Fortran Compiler (Informational)
-    print("\nStep 1: Checking for Fortran Compiler (Informational)")
-    print("This script requires a Fortran compiler (like gfortran) to be installed")
-    print("and available in your system's PATH for compiling 'fastscapelib-fortran'.")
-    print("Please ensure a compiler is installed before proceeding if compilation fails.")
-    # Example check (optional, might not be robust across all systems)
-    try:
-        run_command(['gfortran', '--version'], check=False) # Check=False as we only want to see if it runs
-    except FileNotFoundError:
-        print("Warning: 'gfortran' command not found. Fortran compilation might fail.")
-
-    # 2. Compile and install fastscapelib-fortran
-    print(f"\nStep 2: Compiling and installing 'fastscapelib-fortran' from {fortran_lib_path}")
-    if not os.path.isdir(fortran_lib_path):
-        print(f"Error: Directory not found: {fortran_lib_path}")
-        print("Please ensure you have moved 'fastscapelib-fortran' into the 'external' directory.")
+    if not os.path.exists(env_file_path):
+        print(f"\nError: environment.yml not found at {env_file_path}")
+        print("Cannot proceed with Conda environment creation.")
         sys.exit(1)
 
-    # Command: pip install --no-build-isolation --editable .
-    # Using sys.executable ensures we use the pip associated with the current python interpreter
-    compile_command = [
-        sys.executable, "-m", "pip", "install",
-        "--no-build-isolation", # Avoids issues with isolated build environments
-        "--editable", "."       # Install in editable mode from current dir
-    ]
-    if not run_command(compile_command, cwd=fortran_lib_path):
-        print("\nError: Failed to compile/install 'fastscapelib-fortran'.")
-        print("Please check the output above for errors. Ensure a Fortran compiler is installed and accessible.")
-        sys.exit(1)
+    print(f"\n1. Create the Conda environment from '{os.path.basename(env_file_path)}':")
+    print("   Open your terminal (Anaconda Prompt, PowerShell, bash, etc.)")
+    print(f"   Navigate to the project root directory: cd \"{project_root}\"")
+    print("   Run the following command:")
+    print("   conda env create -f environment.yml")
+    print("\n   This will create a new environment (likely named 'pinn-fastscape-env')")
+    print("   and install Python, PyTorch, fastscape, and other core dependencies.")
+    print("   Note: This step might take some time.")
 
-    # 3. Install Python dependencies
-    print(f"\nStep 3: Installing Python requirements from {requirements_path}")
-    if not os.path.exists(requirements_path):
-        print(f"Error: requirements.txt not found at {requirements_path}")
-        sys.exit(1)
+    print("\n2. Activate the Conda environment:")
+    print("   conda activate pinn-fastscape-env  (Replace 'pinn-fastscape-env' if you changed the name in environment.yml)")
 
-    # Command: pip install -r requirements.txt
-    install_command = [sys.executable, "-m", "pip", "install", "-r", requirements_path]
-    if not run_command(install_command, cwd=project_root):
-        print("\nError: Failed to install Python requirements.")
-        print("Please check the output above for errors.")
-        sys.exit(1)
+    print("\n3. (Optional) Install development/testing tools using pip:")
+    if os.path.exists(requirements_path):
+        print(f"   Make sure the 'pinn-fastscape-env' environment is activated.")
+        print(f"   Run the following command to install tools like pytest:")
+        # Construct the pip install command using sys.executable to ensure correct pip
+        pip_install_command = [sys.executable, "-m", "pip", "install", "-r", requirements_path]
+        print(f"   {' '.join(pip_install_command)}")
+        # Optionally, run the command here, but it's better to guide the user
+        # print("\n   Attempting to install development requirements...")
+        # run_command(pip_install_command, cwd=project_root)
+    else:
+        print("   requirements.txt not found, skipping pip install step for dev tools.")
 
-    print("\n--- Environment Setup Completed Successfully ---")
-    print(f"Setup was performed using Python interpreter: {sys.executable}")
-    print("You should now be able to run the data generation and training scripts within the same environment.")
+
+    print("\n--- Setup Guide Finished ---")
+    print("After completing the steps above, your environment should be ready.")
+    print("Remember to activate the 'pinn-fastscape-env' environment each time you work on the project.")
 
 if __name__ == "__main__":
     main()

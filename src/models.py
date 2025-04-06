@@ -46,18 +46,22 @@ class MLP_PINN(nn.Module):
     输入坐标 (x, y, t) 或 (x, y, t, param1, param2, ...)，预测地形 h。
     也支持基于网格的状态预测。
     """
-    def __init__(self, input_dim=3, output_dim=1, hidden_layers=8, hidden_neurons=256, activation=nn.Tanh(), dtype=torch.float32):
+    # REMOVED dtype=torch.float32 from signature
+    def __init__(self, input_dim=3, output_dim=1, hidden_layers=8, hidden_neurons=256, activation=nn.Tanh()):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim # Store output_dim
 
         layers = []
-        layers.append(nn.Linear(input_dim, hidden_neurons, dtype=dtype))
+        # REMOVED dtype=dtype from nn.Linear
+        layers.append(nn.Linear(input_dim, hidden_neurons))
         layers.append(activation)
         for _ in range(hidden_layers - 1):
-            layers.append(nn.Linear(hidden_neurons, hidden_neurons, dtype=dtype))
+            # REMOVED dtype=dtype from nn.Linear
+            layers.append(nn.Linear(hidden_neurons, hidden_neurons))
             layers.append(activation)
-        layers.append(nn.Linear(hidden_neurons, output_dim, dtype=dtype))
+        # REMOVED dtype=dtype from nn.Linear
+        layers.append(nn.Linear(hidden_neurons, output_dim))
         self.network = nn.Sequential(*layers)
         self.init_weights()
 
@@ -380,11 +384,19 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
     """支持任意尺寸参数矩阵和多分辨率处理的物理信息神经网络"""
     def __init__(self, input_dim=5, output_dim=1, hidden_dim=256, num_layers=8,
                  base_resolution=64, max_resolution=1024, activation=nn.Tanh(),
-                 coordinate_input_dim=5): # Add coordinate_input_dim
+                 coordinate_input_dim=5, # Add coordinate_input_dim
+                 domain_x: list = [0.0, 1.0], # Add domain info with defaults
+                 domain_y: list = [0.0, 1.0]):
         super().__init__() # Call TimeDerivativePINN init
         self.output_dim = output_dim
         self.base_resolution = base_resolution
         self.max_resolution = max_resolution
+        # Store domain boundaries
+        if not (isinstance(domain_x, (list, tuple)) and len(domain_x) == 2 and isinstance(domain_y, (list, tuple)) and len(domain_y) == 2):
+             raise ValueError("domain_x and domain_y must be lists or tuples of length 2.")
+        self.domain_x = domain_x
+        self.domain_y = domain_y
+        self.epsilon = 1e-9 # For safe division during normalization
 
         # 基础坐标-参数MLP (x, y, t, k, u -> h)
         # Coordinate MLP now needs separate heads
@@ -465,7 +477,8 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         if grid.shape[0] != param_grid.shape[0]: grid = grid.expand(param_grid.shape[0], -1, -1, -1)
 
         # 采样 [B, C, N, 1]
-        sampled = F.grid_sample(param_grid, grid.to(dtype), mode='bilinear', padding_mode='border', align_corners=False)
+        # MODIFIED: Set align_corners=True for sampling with [0,1] normalized coords converted to [-1,1]
+        sampled = F.grid_sample(param_grid, grid.to(dtype), mode='bilinear', padding_mode='border', align_corners=True)
 
         # Reshape to [N, C] (average over batch if B > 1)
         if sampled.shape[0] > 1: sampled = sampled.mean(dim=0)
@@ -671,8 +684,15 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
             if not isinstance(x, dict): raise TypeError("对于 'predict_coords' 模式，输入 x 必须是字典。")
             coords = {k: v for k, v in x.items() if k in ['x', 'y', 't']}
             if 'x' not in coords or 'y' not in coords: raise ValueError("缺少 'x' 或 'y' 坐标。")
-            k_value = self._sample_at_coords(x.get('k_grid'), coords['x'], coords['y'])
-            u_value = self._sample_at_coords(x.get('u_grid'), coords['x'], coords['y'])
+            # Normalize coordinates before sampling
+            x_coords_phys = coords['x']
+            y_coords_phys = coords['y']
+            x_coords_norm = (x_coords_phys - self.domain_x[0]) / (self.domain_x[1] - self.domain_x[0] + self.epsilon)
+            y_coords_norm = (y_coords_phys - self.domain_y[0]) / (self.domain_y[1] - self.domain_y[0] + self.epsilon)
+
+            # Sample using normalized coordinates
+            k_value = self._sample_at_coords(x.get('k_grid'), x_coords_norm, y_coords_norm)
+            u_value = self._sample_at_coords(x.get('u_grid'), x_coords_norm, y_coords_norm)
             augmented_coords = {**coords, 'k': k_value, 'u': u_value}
 
             # 2. 通过基础 MLP 获取共享特征
