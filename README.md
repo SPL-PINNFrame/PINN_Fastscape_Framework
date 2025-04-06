@@ -90,9 +90,9 @@ PINN_Fastscape_Framework/
 ### 3.1 地貌演化的控制方程
 
 框架模拟河流侵蚀和坡面扩散，由以下 PDE 描述：
-$$
+
 \frac{\partial z}{\partial t} = U - K_{sp} A^m S^n + K_d \nabla^2 h
-$$
+
 其中：
 
 - z: 地形高度
