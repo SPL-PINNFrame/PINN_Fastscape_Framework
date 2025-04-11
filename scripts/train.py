@@ -24,7 +24,11 @@ def main(args):
     run_name = config.get('run_name', train_config.get('run_name'))
     log_dir = os.path.join(output_dir, run_name, 'logs')
     os.makedirs(log_dir, exist_ok=True) # Ensure log directory exists
-    setup_logging(log_dir=log_dir) # Pass log_dir to setup_logging
+    # Combine log_dir and a default filename for the log_file argument
+    log_file_path = os.path.join(log_dir, 'train.log')
+    # Get log level from config, default to INFO
+    log_level = config.get('logging', {}).get('log_level', 'INFO')
+    setup_logging(log_level=log_level, log_file=log_file_path, log_to_console=True) # Pass the full path
 
     # Set random seed for reproducibility
     seed = train_config.get('seed', 42)

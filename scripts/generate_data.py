@@ -253,7 +253,11 @@ def main(args):
     config = load_config(args.config)
     log_config = config.get('logging', {})
     log_dir = log_config.get('log_dir', 'logs/data_generation')
-    setup_logging(log_dir=log_dir, log_filename="generate_data.log")
+    log_filename = log_config.get('log_filename', 'generate_data.log')
+    log_file_path = os.path.join(log_dir, log_filename) if log_dir and log_filename else None
+    # Get log level from config, default to INFO
+    log_level = log_config.get('log_level', 'INFO')
+    setup_logging(log_level=log_level, log_file=log_file_path, log_to_console=True) # Pass the full path
 
     base_data_gen_config = config.get('data_generation', {})
     base_output_dir = base_data_gen_config.get('output_dir', 'data/processed')

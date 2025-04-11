@@ -102,14 +102,18 @@ class PINNTrainer:
         self.device = self._setup_device()
         self.model = self.model.to(self.device)
 
+        # Use train_settings which correctly handles nested 'training' config
+        train_settings = self.train_config.get('training', self.train_config)
+
         # Setup optimizer
-        self.optimizer_type = self.train_config.get('optimizer', 'adam')
-        self.learning_rate = self.train_config.get('learning_rate', 1e-3)
-        self.weight_decay = self.train_config.get('weight_decay', 0.0)
+        self.optimizer_type = train_settings.get('optimizer', 'adam')
+        self.learning_rate = train_settings.get('learning_rate', 1e-3)
+        self.weight_decay = train_settings.get('weight_decay', 0.0)
         self.optimizer = self._setup_optimizer()
 
-        # Setup LR scheduler
-        self.scheduler_type = self.train_config.get('lr_scheduler', 'step')
+        # Setup LR scheduler using train_settings
+        self.scheduler_type = train_settings.get('lr_scheduler', 'step')
+        self.scheduler_config = train_settings.get('lr_scheduler_config', {}) # Also read config here
         self.scheduler = self._setup_lr_scheduler()
 
         # Loss weights and scheduler
@@ -161,9 +165,16 @@ class PINNTrainer:
         # Mixed Precision
         self.use_amp = self.train_config.get('use_mixed_precision', False)
         # Use the updated torch.amp API
-        self.scaler = torch.amp.GradScaler(device=self.device.type, enabled=self.use_amp) # Match device type
+        # Enable scaler only if use_amp is true AND device is cuda
+        amp_enabled = self.use_amp and self.device.type == 'cuda'
+        self.scaler = torch.amp.GradScaler(device=self.device.type, enabled=amp_enabled)
         if self.use_amp:
-             logging.info("Mixed precision training enabled.")
+             if amp_enabled:
+                  logging.info("Mixed precision training enabled (CUDA).")
+             elif self.use_amp:
+                  logging.info("Mixed precision training requested but device is CPU. Scaler disabled.")
+             else:
+                  logging.info("Mixed precision training disabled.")
 
         # Setup checkpoint directory
         self.run_name = self.train_config.get('run_name', 'pinn_run')
@@ -590,6 +601,7 @@ class PINNTrainer:
 
             # Save checkpoint periodically if not saving best only
             if not save_best_only and (epoch + 1) % save_interval == 0:
+                 logging.info(f"Epoch {epoch}: Triggering periodic checkpoint save (save_interval={save_interval}).")
                  self.save_checkpoint(epoch, f'epoch_{epoch:04d}.pth')
 
 
@@ -636,16 +648,18 @@ class PINNTrainer:
              state['amp_scaler_state_dict'] = self.scaler.state_dict()
 
         filepath = os.path.join(self.checkpoint_dir, filename)
-        try:
-            torch.save(state, filepath)
-            logging.info(f"Checkpoint saved to {filepath}")
-            if is_best:
-                 # Ensure the best model is always saved with a consistent name
-                 best_filepath = os.path.join(self.checkpoint_dir, 'best_model.pth')
-                 torch.save(state, best_filepath)
-                 logging.info(f"Best model checkpoint updated: {best_filepath}")
-        except Exception as e:
-             logging.error(f"Failed to save checkpoint {filepath}: {e}")
+        # Remove try-except or re-raise to make save errors visible to tests
+        # try:
+        torch.save(state, filepath)
+        logging.info(f"Checkpoint saved to {filepath}")
+        if is_best:
+             # Ensure the best model is always saved with a consistent name
+             best_filepath = os.path.join(self.checkpoint_dir, 'best_model.pth')
+             torch.save(state, best_filepath)
+             logging.info(f"Best model checkpoint updated: {best_filepath}")
+        # except Exception as e:
+        #      logging.error(f"Failed to save checkpoint {filepath}: {e}")
+        #      raise # Re-raise the exception so the test fails if saving fails
 
 
     def load_checkpoint(self, filepath):
@@ -727,8 +741,10 @@ class PINNTrainer:
         
     def _setup_lr_scheduler(self):
         """设置学习率调度器"""
-        scheduler_config = self.train_config.get('lr_scheduler_config', {})
-        scheduler_name = self.scheduler_type.lower()
+        # Use self.scheduler_config read during __init__
+        scheduler_config = self.scheduler_config
+        # Handle case where scheduler_type might be None from config
+        scheduler_name = self.scheduler_type.lower() if isinstance(self.scheduler_type, str) else 'none'
         
         if scheduler_name == 'step':
             step_size = scheduler_config.get('step_size', 30)

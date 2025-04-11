@@ -123,7 +123,10 @@ def test_mlp_pinn_forward_coords(dummy_config_mlp, dummy_coord_input):
     """Tests MLP_PINN forward pass in predict_coords mode."""
     cfg = dummy_config_mlp['model']
     model = MLP_PINN(input_dim=cfg['input_dim'], output_dim=cfg['output_dim'])
+    # Set model to output only state to match the original test assertion expectation
+    model.set_output_mode(state=True, derivative=False)
     output = model(dummy_coord_input, mode='predict_coords')
+    # Now that the model is set to single output, assert it's a tensor
     assert isinstance(output, torch.Tensor)
     assert output.shape == (len(dummy_coord_input['x']), cfg['output_dim'])
     assert output.requires_grad # Check gradient connection

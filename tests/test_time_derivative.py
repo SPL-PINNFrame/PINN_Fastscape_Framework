@@ -124,18 +124,27 @@ def test_finite_difference_derivative(time_derivative_model):
     # Set to output both state and derivative
     time_derivative_model.set_output_mode(state=True, derivative=True)
     
-    # Get model outputs
-    with torch.no_grad():
-        outputs = time_derivative_model(coords, mode='predict_coords')
-        model_deriv = outputs['derivative']
-        
-        # Get finite difference approximation
-        fd_deriv = time_derivative_model.predict_derivative_fd(coords, delta_t=1e-3, mode='predict_coords')
+    # 移除no_grad并调整步长
+    outputs = time_derivative_model(coords, mode='predict_coords')
+    model_deriv = outputs['derivative']
     
-    # Check that the derivatives are similar (allowing some numerical error)
-    assert torch.allclose(model_deriv, fd_deriv, rtol=1e-2, atol=1e-2)
+    # 使用更小步长并确保梯度追踪
+    fd_deriv = time_derivative_model.predict_derivative_fd(
+        coords, 
+        delta_t=1e-4,
+        mode='predict_coords'
+    )
+    
+    # 添加调试信息
+    logging.info(f'Model derivative sample:\n{model_deriv[:5].detach().cpu().numpy()}')
+    logging.info(f'FD derivative sample:\n{fd_deriv[:5].detach().cpu().numpy()}')
+    
+    # 调整容差参数
+    assert torch.allclose(model_deriv, fd_deriv, rtol=1e-2, atol=1e-3)
 
 def test_pde_residual_with_dual_output(adaptive_model):
+    # 初始化模型时强制启用导数输出
+    adaptive_model.output_derivative = True
     """Tests the PDE residual calculation using dual output method"""
     # Create sample inputs
     inputs = create_sample_inputs()
@@ -163,6 +172,10 @@ def test_pde_residual_with_dual_output(adaptive_model):
     assert isinstance(model_outputs, dict)
     assert 'state' in model_outputs
     assert 'derivative' in model_outputs
+    # 验证导数张量有效性
+    assert model_outputs['derivative'] is not None
+    assert torch.isfinite(model_outputs['derivative']).all()
+    assert model_outputs['derivative'].requires_grad
     
     # Calculate PDE residual using dual output method
     try:

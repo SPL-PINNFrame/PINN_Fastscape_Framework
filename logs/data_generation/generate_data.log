@@ -26163,3 +26163,387 @@ label 58:
 2025-04-06 23:32:32,913 [INFO] Sample 2: Successfully saved.
 2025-04-06 23:32:32,913 [INFO] Dataset generation finished for shape (17, 17). 2/2 samples generated.
 2025-04-06 23:32:32,913 [INFO] Multi-scale data generation finished.
+2025-04-11 23:43:40,727 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:43:40
+2025-04-11 23:43:40,728 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:43:40,728 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:43:40,728 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:43:40,729 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:43:40,803 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:43:40,804 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:43:40,814 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:43:40,814 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:43:40,815 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:43:40,815 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0007584277563044967, 'spl__k_coef': 1.2239348172341337e-06, 'diffusion__diffusivity': 0.39950728359048326, 'spl__area_exp': 0.4438074297286669, 'spl__slope_exp': 1.0}
+2025-04-11 23:43:40,839 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:43:45,982 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:43:45,986 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:43:45,987 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:43:45,987 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:43:45,988 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:43:45,988 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:43:45,989 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0001012759323354554, 'spl__k_coef': 7.502055418888426e-06, 'diffusion__diffusivity': 0.8275924557730018, 'spl__area_exp': 0.4091700548162869, 'spl__slope_exp': 1.0}
+2025-04-11 23:43:45,999 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:43:46,031 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:43:46,035 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:43:46,035 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:43:46,035 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:45:00,693 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:45:00
+2025-04-11 23:45:00,694 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:45:00,694 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:45:00,694 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:45:00,694 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:45:00,770 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:45:00,772 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:45:00,772 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:45:00,773 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:45:00,773 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:45:00,773 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0008542558492687381, 'spl__k_coef': 5.7255282305430885e-06, 'diffusion__diffusivity': 0.23409062773914274, 'spl__area_exp': 0.4374755529374982, 'spl__slope_exp': 1.0}
+2025-04-11 23:45:00,784 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:45:01,976 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:45:01,979 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:45:01,980 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:45:01,980 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:45:01,980 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:45:01,981 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:45:01,981 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.00021987629795772976, 'spl__k_coef': 4.787003363806199e-06, 'diffusion__diffusivity': 0.6979492833844918, 'spl__area_exp': 0.40183880859148924, 'spl__slope_exp': 1.0}
+2025-04-11 23:45:01,991 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:45:02,022 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:45:02,025 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:45:02,025 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:45:02,026 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:46:07,736 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:46:07
+2025-04-11 23:46:07,736 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:46:07,736 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:46:07,736 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:46:07,736 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:46:07,830 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:46:07,831 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:46:07,831 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:46:07,831 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:46:07,832 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:46:07,832 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0008711188466353745, 'spl__k_coef': 1.8526277013275278e-06, 'diffusion__diffusivity': 0.9928616875995789, 'spl__area_exp': 0.5638391651353054, 'spl__slope_exp': 1.0}
+2025-04-11 23:46:07,843 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:46:09,037 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:46:09,039 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:46:09,040 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:46:09,041 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:46:09,041 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:46:09,041 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:46:09,041 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0006142519565532945, 'spl__k_coef': 8.019062386832454e-06, 'diffusion__diffusivity': 0.8382180634805716, 'spl__area_exp': 0.5955779893902536, 'spl__slope_exp': 1.0}
+2025-04-11 23:46:09,050 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:46:09,081 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:46:09,083 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:46:09,084 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:46:09,084 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:47:34,821 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:47:34
+2025-04-11 23:47:34,822 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:47:34,822 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:47:34,822 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:47:34,823 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:47:34,898 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:47:34,899 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:47:34,899 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:47:34,900 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:47:34,900 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:47:34,900 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0003656711950494931, 'spl__k_coef': 1.658878968890425e-06, 'diffusion__diffusivity': 0.1604612528419236, 'spl__area_exp': 0.41149258022068363, 'spl__slope_exp': 1.0}
+2025-04-11 23:47:34,911 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:47:36,072 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:47:36,075 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:47:36,075 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:47:36,076 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:47:36,076 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:47:36,076 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:47:36,076 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.00015585181474736675, 'spl__k_coef': 4.147974806314478e-06, 'diffusion__diffusivity': 0.4367567295523226, 'spl__area_exp': 0.4297016655171447, 'spl__slope_exp': 1.0}
+2025-04-11 23:47:36,086 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:47:36,117 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:47:36,119 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:47:36,119 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:47:36,119 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:51:28,557 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:51:28
+2025-04-11 23:51:28,557 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:51:28,558 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:51:28,558 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:51:28,558 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:51:28,636 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:51:28,636 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:51:28,636 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:51:28,637 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:51:28,637 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:51:28,637 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0008849575434875533, 'spl__k_coef': 8.564329405096536e-06, 'diffusion__diffusivity': 0.43424354071070037, 'spl__area_exp': 0.48967192511529306, 'spl__slope_exp': 1.0}
+2025-04-11 23:51:28,648 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:51:30,069 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:51:30,073 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:51:30,074 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:51:30,074 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:51:30,074 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:51:30,075 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:51:30,075 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0006245039924206061, 'spl__k_coef': 2.8359785404472937e-06, 'diffusion__diffusivity': 0.11970000778675621, 'spl__area_exp': 0.5988626776316575, 'spl__slope_exp': 1.0}
+2025-04-11 23:51:30,084 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:51:30,116 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:51:30,119 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:51:30,120 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:51:30,120 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:52:27,834 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:52:27
+2025-04-11 23:52:27,834 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:52:27,835 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:52:27,835 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:52:27,835 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:52:27,920 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:52:27,922 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:52:27,922 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:52:27,922 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:52:27,922 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:52:27,923 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0002609762029853314, 'spl__k_coef': 4.305731020353989e-06, 'diffusion__diffusivity': 0.4488882804511517, 'spl__area_exp': 0.5044621331868152, 'spl__slope_exp': 1.0}
+2025-04-11 23:52:27,934 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:52:29,292 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:52:29,297 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:52:29,298 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:52:29,298 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:52:29,298 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:52:29,299 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:52:29,299 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.00013683318319789215, 'spl__k_coef': 5.927926276203208e-06, 'diffusion__diffusivity': 0.8793131750704017, 'spl__area_exp': 0.4900920110121004, 'spl__slope_exp': 1.0}
+2025-04-11 23:52:29,314 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:52:29,361 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:52:29,366 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:52:29,367 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:52:29,367 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:54:11,979 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:54:11
+2025-04-11 23:54:11,979 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:54:11,980 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:54:11,980 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:54:11,980 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:54:12,056 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:54:12,056 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:54:12,057 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:54:12,057 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:54:12,057 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:54:12,057 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0009871854764733705, 'spl__k_coef': 5.5199679376641015e-06, 'diffusion__diffusivity': 0.8152531410292072, 'spl__area_exp': 0.5187966199567158, 'spl__slope_exp': 1.0}
+2025-04-11 23:54:12,069 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:54:13,307 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:54:13,311 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:54:13,312 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:54:13,313 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:54:13,313 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:54:13,313 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:54:13,314 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.000807434204678625, 'spl__k_coef': 1.5935699206014629e-06, 'diffusion__diffusivity': 0.9125038473459715, 'spl__area_exp': 0.5930427503772784, 'spl__slope_exp': 1.0}
+2025-04-11 23:54:13,324 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:54:13,357 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:54:13,359 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:54:13,359 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:54:13,360 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:56:09,816 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:56:09
+2025-04-11 23:56:09,816 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:56:09,817 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:56:09,817 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:56:09,818 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:56:09,904 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:56:09,905 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:56:09,906 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:56:09,906 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:56:09,906 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:56:09,907 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0005102708777696279, 'spl__k_coef': 9.630097758650044e-06, 'diffusion__diffusivity': 0.6614271987311666, 'spl__area_exp': 0.4025696389956232, 'spl__slope_exp': 1.0}
+2025-04-11 23:56:09,917 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:56:11,181 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:56:11,184 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:56:11,185 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:56:11,185 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:56:11,185 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:56:11,186 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:56:11,186 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.000909435583612456, 'spl__k_coef': 5.830281496077197e-06, 'diffusion__diffusivity': 0.46594699343007395, 'spl__area_exp': 0.41319485127484123, 'spl__slope_exp': 1.0}
+2025-04-11 23:56:11,197 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:56:11,234 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:56:11,236 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:56:11,237 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:56:11,237 - root - INFO - Multi-scale data generation finished.
+2025-04-11 23:57:05,122 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-11 23:57:05
+2025-04-11 23:57:05,122 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-11 23:57:05,123 - root - INFO - Base output directory: pytest_data/processed
+2025-04-11 23:57:05,123 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-11 23:57:05,123 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-11 23:57:05,210 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-11 23:57:05,211 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-11 23:57:05,212 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:57:05,212 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:57:05,212 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:57:05,212 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0009672183537098431, 'spl__k_coef': 6.204833067141431e-06, 'diffusion__diffusivity': 0.9073372229431717, 'spl__area_exp': 0.5116950221274155, 'spl__slope_exp': 1.0}
+2025-04-11 23:57:05,225 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-11 23:57:06,508 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-11 23:57:06,511 - root - INFO - Sample 1: Successfully saved.
+2025-04-11 23:57:06,512 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-11 23:57:06,512 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-11 23:57:06,512 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-11 23:57:06,513 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-11 23:57:06,513 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0008452729430174247, 'spl__k_coef': 4.238476517083864e-06, 'diffusion__diffusivity': 0.11178656765875838, 'spl__area_exp': 0.5573333821637227, 'spl__slope_exp': 1.0}
+2025-04-11 23:57:06,523 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-11 23:57:06,554 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-11 23:57:06,556 - root - INFO - Sample 2: Successfully saved.
+2025-04-11 23:57:06,556 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-11 23:57:06,557 - root - INFO - Multi-scale data generation finished.
+2025-04-12 00:05:06,308 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-12 00:05:06
+2025-04-12 00:05:06,308 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-12 00:05:06,308 - root - INFO - Base output directory: pytest_data/processed
+2025-04-12 00:05:06,309 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-12 00:05:06,309 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-12 00:05:06,389 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-12 00:05:06,390 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-12 00:05:06,390 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:05:06,391 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:05:06,391 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:05:06,391 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0009985562618427225, 'spl__k_coef': 8.015503757452696e-06, 'diffusion__diffusivity': 0.44101905211265713, 'spl__area_exp': 0.5246536407107791, 'spl__slope_exp': 1.0}
+2025-04-12 00:05:06,402 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-12 00:05:07,659 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-12 00:05:07,665 - root - INFO - Sample 1: Successfully saved.
+2025-04-12 00:05:07,665 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-12 00:05:07,666 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:05:07,666 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:05:07,666 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:05:07,667 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0006531660555975232, 'spl__k_coef': 9.884036502507287e-06, 'diffusion__diffusivity': 0.5160239718435844, 'spl__area_exp': 0.521763663809123, 'spl__slope_exp': 1.0}
+2025-04-12 00:05:07,678 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-12 00:05:07,716 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-12 00:05:07,719 - root - INFO - Sample 2: Successfully saved.
+2025-04-12 00:05:07,719 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-12 00:05:07,719 - root - INFO - Multi-scale data generation finished.
+2025-04-12 00:07:10,861 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-12 00:07:10
+2025-04-12 00:07:10,861 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-12 00:07:10,861 - root - INFO - Base output directory: pytest_data/processed
+2025-04-12 00:07:10,862 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-12 00:07:10,862 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-12 00:07:10,937 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-12 00:07:10,937 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-12 00:07:10,938 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:07:10,938 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:07:10,938 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:07:10,938 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.00087986249831707, 'spl__k_coef': 3.000827696984824e-06, 'diffusion__diffusivity': 0.892345055490755, 'spl__area_exp': 0.5633187105851721, 'spl__slope_exp': 1.0}
+2025-04-12 00:07:10,950 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-12 00:07:12,163 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-12 00:07:12,167 - root - INFO - Sample 1: Successfully saved.
+2025-04-12 00:07:12,167 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-12 00:07:12,168 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:07:12,168 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:07:12,168 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:07:12,168 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0003787252072662653, 'spl__k_coef': 2.911329913451572e-06, 'diffusion__diffusivity': 0.659086723822017, 'spl__area_exp': 0.4024558096407931, 'spl__slope_exp': 1.0}
+2025-04-12 00:07:12,179 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-12 00:07:12,214 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-12 00:07:12,217 - root - INFO - Sample 2: Successfully saved.
+2025-04-12 00:07:12,217 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-12 00:07:12,218 - root - INFO - Multi-scale data generation finished.
+2025-04-12 00:39:40,362 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-12 00:39:40
+2025-04-12 00:39:40,363 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-12 00:39:40,363 - root - INFO - Base output directory: pytest_data/processed
+2025-04-12 00:39:40,363 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-12 00:39:40,363 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-12 00:39:40,447 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-12 00:39:40,447 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-12 00:39:40,448 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:39:40,448 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:39:40,448 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:39:40,449 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0002033875186188812, 'spl__k_coef': 2.3920603185841272e-06, 'diffusion__diffusivity': 0.5149406769368771, 'spl__area_exp': 0.5707716158337224, 'spl__slope_exp': 1.0}
+2025-04-12 00:39:40,459 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-12 00:39:41,743 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-12 00:39:41,746 - root - INFO - Sample 1: Successfully saved.
+2025-04-12 00:39:41,747 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-12 00:39:41,747 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:39:41,748 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:39:41,748 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:39:41,748 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0004656281202804392, 'spl__k_coef': 6.256066699021844e-06, 'diffusion__diffusivity': 0.27928072124488323, 'spl__area_exp': 0.5174982445804734, 'spl__slope_exp': 1.0}
+2025-04-12 00:39:41,758 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-12 00:39:41,789 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-12 00:39:41,791 - root - INFO - Sample 2: Successfully saved.
+2025-04-12 00:39:41,791 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-12 00:39:41,792 - root - INFO - Multi-scale data generation finished.
+2025-04-12 00:52:10,375 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-12 00:52:10
+2025-04-12 00:52:10,376 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-12 00:52:10,376 - root - INFO - Base output directory: pytest_data/processed
+2025-04-12 00:52:10,376 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-12 00:52:10,377 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-12 00:52:10,462 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-12 00:52:10,463 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-12 00:52:10,463 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:52:10,463 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:52:10,464 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:52:10,464 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.00020527304636477455, 'spl__k_coef': 7.497892414094867e-06, 'diffusion__diffusivity': 0.1005486683123143, 'spl__area_exp': 0.48511100479827907, 'spl__slope_exp': 1.0}
+2025-04-12 00:52:10,475 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-12 00:52:11,771 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-12 00:52:11,774 - root - INFO - Sample 1: Successfully saved.
+2025-04-12 00:52:11,775 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-12 00:52:11,775 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:52:11,776 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:52:11,776 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:52:11,776 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0001745996781571981, 'spl__k_coef': 6.6596447418598716e-06, 'diffusion__diffusivity': 0.4607508089282717, 'spl__area_exp': 0.48556555414725183, 'spl__slope_exp': 1.0}
+2025-04-12 00:52:11,786 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-12 00:52:11,817 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-12 00:52:11,819 - root - INFO - Sample 2: Successfully saved.
+2025-04-12 00:52:11,819 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-12 00:52:11,819 - root - INFO - Multi-scale data generation finished.
+2025-04-12 00:59:50,450 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-12 00:59:50
+2025-04-12 00:59:50,451 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-12 00:59:50,451 - root - INFO - Base output directory: pytest_data/processed
+2025-04-12 00:59:50,451 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-12 00:59:50,451 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-12 00:59:50,529 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-12 00:59:50,530 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-12 00:59:50,530 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:59:50,530 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:59:50,530 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:59:50,530 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0005098826909612608, 'spl__k_coef': 4.288282651660121e-06, 'diffusion__diffusivity': 0.4941428513667767, 'spl__area_exp': 0.5106008319968827, 'spl__slope_exp': 1.0}
+2025-04-12 00:59:50,540 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-12 00:59:51,841 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-12 00:59:51,845 - root - INFO - Sample 1: Successfully saved.
+2025-04-12 00:59:51,845 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-12 00:59:51,846 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 00:59:51,846 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 00:59:51,846 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 00:59:51,846 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.00029652735082316705, 'spl__k_coef': 3.684495830093323e-06, 'diffusion__diffusivity': 0.2690826616248349, 'spl__area_exp': 0.5977051982293691, 'spl__slope_exp': 1.0}
+2025-04-12 00:59:51,857 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-12 00:59:51,888 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-12 00:59:51,890 - root - INFO - Sample 2: Successfully saved.
+2025-04-12 00:59:51,890 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-12 00:59:51,890 - root - INFO - Multi-scale data generation finished.
+2025-04-12 01:02:36,117 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-12 01:02:36
+2025-04-12 01:02:36,118 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-12 01:02:36,118 - root - INFO - Base output directory: pytest_data/processed
+2025-04-12 01:02:36,118 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-12 01:02:36,119 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-12 01:02:36,196 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-12 01:02:36,196 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-12 01:02:36,197 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 01:02:36,197 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 01:02:36,197 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 01:02:36,198 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0009290027175033435, 'spl__k_coef': 8.778374599400139e-06, 'diffusion__diffusivity': 0.8331965294115903, 'spl__area_exp': 0.5825720737740274, 'spl__slope_exp': 1.0}
+2025-04-12 01:02:36,209 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-12 01:02:37,436 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-12 01:02:37,439 - root - INFO - Sample 1: Successfully saved.
+2025-04-12 01:02:37,440 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-12 01:02:37,440 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 01:02:37,440 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 01:02:37,441 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 01:02:37,441 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0007229045322060815, 'spl__k_coef': 1.8752360765862157e-06, 'diffusion__diffusivity': 0.7121174205301748, 'spl__area_exp': 0.46402628467136586, 'spl__slope_exp': 1.0}
+2025-04-12 01:02:37,452 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-12 01:02:37,484 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-12 01:02:37,485 - root - INFO - Sample 2: Successfully saved.
+2025-04-12 01:02:37,486 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-12 01:02:37,486 - root - INFO - Multi-scale data generation finished.
+2025-04-12 01:06:02,016 - root - INFO - 日志系统初始化完成。级别: INFO, 时间: 2025-04-12 01:06:02
+2025-04-12 01:06:02,016 - root - INFO - Starting multi-scale data generation for resolutions: [[17, 17]]
+2025-04-12 01:06:02,017 - root - INFO - Base output directory: pytest_data/processed
+2025-04-12 01:06:02,017 - root - INFO - Physical domain size: 10000.0 x 10000.0
+2025-04-12 01:06:02,017 - root - INFO - --- Processing resolution: 17x17 ---
+2025-04-12 01:06:02,090 - root - INFO - Generating dataset: 2 samples for shape (17, 17) into pytest_data/processed\resolution_17x17
+2025-04-12 01:06:02,091 - root - INFO - --- Generating sample 1 for shape (17, 17) ---
+2025-04-12 01:06:02,091 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 01:06:02,092 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 01:06:02,092 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 01:06:02,092 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.00010387634732531603, 'spl__k_coef': 6.670209135012353e-06, 'diffusion__diffusivity': 0.4333221568090522, 'spl__area_exp': 0.5961092343793661, 'spl__slope_exp': 1.0}
+2025-04-12 01:06:02,104 - root - INFO - Sample 1: Starting xsimlab.run...
+2025-04-12 01:06:03,372 - root - INFO - Sample 1: xsimlab.run finished.
+2025-04-12 01:06:03,376 - root - INFO - Sample 1: Successfully saved.
+2025-04-12 01:06:03,376 - root - INFO - --- Generating sample 2 for shape (17, 17) ---
+2025-04-12 01:06:03,377 - root - WARNING - Invalid range format for scalar parameter 'diffusion__diffusivity': [0.2, 0.2]. Using default range [0.1, 1.0].
+2025-04-12 01:06:03,377 - root - WARNING - Invalid range format for scalar parameter 'spl__area_exp': [0.5, 0.5]. Using default range [0.4, 0.6].
+2025-04-12 01:06:03,377 - root - WARNING - Invalid range format for scalar parameter 'spl__slope_exp': [1.0, 1.0]. Using default range [1.0, 1.0].
+2025-04-12 01:06:03,378 - root - INFO - Sampled SCALAR parameters (initial): {'uplift__rate': 0.0007236806491911698, 'spl__k_coef': 6.580229645115366e-06, 'diffusion__diffusivity': 0.6805077408437756, 'spl__area_exp': 0.5514364769380425, 'spl__slope_exp': 1.0}
+2025-04-12 01:06:03,388 - root - INFO - Sample 2: Starting xsimlab.run...
+2025-04-12 01:06:03,420 - root - INFO - Sample 2: xsimlab.run finished.
+2025-04-12 01:06:03,422 - root - INFO - Sample 2: Successfully saved.
+2025-04-12 01:06:03,422 - root - INFO - Dataset generation finished for shape (17, 17). 2/2 samples generated.
+2025-04-12 01:06:03,422 - root - INFO - Multi-scale data generation finished.

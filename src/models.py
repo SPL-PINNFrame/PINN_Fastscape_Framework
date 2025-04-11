@@ -4,17 +4,17 @@ import logging
 import torch.nn.functional as F
 import math # For sqrt(2) in AdaptiveFastscapePINN tiling (if needed)
 
-# --- Improved Base Class for Dual Output --- 
+# --- Improved Base Class for Dual Output ---
 class TimeDerivativePINN(nn.Module):
     """能同时输出状态及其时间导数的PINN基类"""
-    
+
     def __init__(self):
         super().__init__()
         self.output_state = True
         self.output_derivative = True
         # Add output mode tracker for debugging
-        self._mode_changes = [] 
-    
+        self._mode_changes = []
+
     def get_output_mode(self):
         """获取当前输出模式"""
         modes = []
@@ -23,41 +23,41 @@ class TimeDerivativePINN(nn.Module):
         if self.output_derivative:
             modes.append('derivative')
         return modes
-    
+
     def set_output_mode(self, state=True, derivative=True):
         """设置输出模式（状态和/或导数）
-        
+
         Args:
             state (bool): 是否输出状态
             derivative (bool): 是否输出时间导数
-            
+
         Raises:
             ValueError: 如果state和derivative均为False
         """
         if not state and not derivative:
             raise ValueError("至少需要一个输出模式为True（state或derivative）")
-        
+
         # Track mode changes for debugging
         old_modes = self.get_output_mode()
         self.output_state = state
         self.output_derivative = derivative
         new_modes = self.get_output_mode()
-        
+
         # Log mode changes
         if old_modes != new_modes:
             self._mode_changes.append((old_modes, new_modes))
             logging.debug(f"TimeDerivativePINN output mode changed: {old_modes} -> {new_modes}")
-    
+
     def check_output_format(self, outputs, required_outputs=None):
         """检查输出格式是否符合预期
-        
+
         Args:
             outputs: 模型输出（字典或张量）
             required_outputs (list, optional): 需要的输出类型列表，例如 ['state', 'derivative']
-                                            
+
         Returns:
             bool: 输出格式是否符合预期
-            
+
         Raises:
             ValueError: 如果输出格式不符合预期且required_outputs不为None
         """
@@ -97,118 +97,121 @@ class TimeDerivativePINN(nn.Module):
                 if required_outputs:
                     raise ValueError(f"需要输出类型 {required_outputs}，但模型返回了单一张量")
                 return False
-    
+
     def forward(self, *args, **kwargs):
         """前向传播，需要在子类中实现"""
         raise NotImplementedError("子类必须实现forward方法")
-    
+
     def predict_derivative_fd(self, x, delta_t=1e-3, mode='predict_coords'):
         """使用有限差分近似计算时间导数（用于测试）
-        
+
         Args:
             x: 输入数据（取决于mode）
             delta_t (float): 时间步长
             mode (str): 预测模式，与forward相同
-            
+
         Returns:
             torch.Tensor: 时间导数近似值
         """
         # 保存当前输出模式
         original_state = self.output_state
         original_derivative = self.output_derivative
-        
+
         # 只输出状态用于有限差分
         self.set_output_mode(state=True, derivative=False)
-        
+
         # 创建前向和后向时间输入副本
         if mode == 'predict_coords':
             # 坐标模式下，修改't'键
             if not isinstance(x, dict) or 't' not in x:
                 raise ValueError("predict_derivative_fd在'predict_coords'模式下需要't'键")
-            
+
             t = x['t']
-            
+
             # 前向时间步
             x_forward = x.copy()
-            x_forward['t'] = t + delta_t/2
-            
+            x_forward['t'] = t + delta_t
+
             # 后向时间步
             x_backward = x.copy()
-            x_backward['t'] = t - delta_t/2
-            
+            x_backward['t'] = t - delta_t
+
         elif mode == 'predict_state':
             # 状态模式下，修改't_target'键
             if not isinstance(x, dict) or 't_target' not in x:
                 raise ValueError("predict_derivative_fd在'predict_state'模式下需要't_target'键")
-            
+
             t_target = x['t_target']
-            
+
             # 前向时间步
             x_forward = x.copy()
             x_forward['t_target'] = t_target + delta_t/2
-            
+
             # 后向时间步
             x_backward = x.copy()
             x_backward['t_target'] = t_target - delta_t/2
-        
+
         else:
             raise ValueError(f"predict_derivative_fd不支持的模式: {mode}")
-        
+
         # 计算前向和后向预测
-        with torch.no_grad():  # 防止创建计算图，这只是用于测试
+        # 使用 torch.no_grad() 避免影响梯度计算
+        with torch.no_grad():
             pred_forward = self.forward(x_forward, mode=mode)
             pred_backward = self.forward(x_backward, mode=mode)
-        
+
         # 使用中心差分计算导数
         if isinstance(pred_forward, dict) and 'state' in pred_forward:
-            derivative_fd = (pred_forward['state'] - pred_backward['state']) / delta_t
+            derivative_fd = (pred_forward['state'] - pred_backward['state']) / (2 * delta_t)
         else:
+            # Assume single output is state
             derivative_fd = (pred_forward - pred_backward) / delta_t
-        
+
         # 恢复原始模式
         self.set_output_mode(state=original_state, derivative=original_derivative)
-        
+
         return derivative_fd
 
 # --- MLP_PINN ---
-class MLP_PINN(nn.Module):
+# Modified MLP_PINN to have a structure similar to TimeDerivativeMLP_PINN
+# It now inherits from TimeDerivativePINN and has separate heads.
+class MLP_PINN(TimeDerivativePINN): # Inherit from base class
     """
-    简单的多层感知机 (MLP) PINN。
-    输入坐标 (x, y, t) 或 (x, y, t, param1, param2, ...)，预测地形 h。
+    简单的多层感知机 (MLP) PINN，支持双输出。
+    输入坐标 (x, y, t) 或 (x, y, t, param1, param2, ...)，预测地形 h 及其导数 dh/dt。
     也支持基于网格的状态预测。
     """
-    # REMOVED dtype=torch.float32 from signature
     def __init__(self, input_dim=3, output_dim=1, hidden_layers=8, hidden_neurons=256, activation=nn.Tanh()):
-        super().__init__()
+        super().__init__() # Call TimeDerivativePINN init
         self.input_dim = input_dim
-        self.output_dim = output_dim # Store output_dim
+        self.output_dim = output_dim
 
         layers = []
-        # REMOVED dtype=dtype from nn.Linear
         layers.append(nn.Linear(input_dim, hidden_neurons))
         layers.append(activation)
         for _ in range(hidden_layers - 1):
-            # REMOVED dtype=dtype from nn.Linear
             layers.append(nn.Linear(hidden_neurons, hidden_neurons))
             layers.append(activation)
-        # REMOVED dtype=dtype from nn.Linear
-        layers.append(nn.Linear(hidden_neurons, output_dim))
-        self.network = nn.Sequential(*layers)
+
+        # Define feature layers (all layers except the final output heads)
+        self.feature_layers = nn.Sequential(*layers) # Define the main sequential network for features
+
+        # Define separate output heads
+        self.state_head = nn.Linear(hidden_neurons, output_dim)
+        self.derivative_head = nn.Linear(hidden_neurons, output_dim) # Keep derivative head simple
+
         self.init_weights()
 
     def init_weights(self):
         """初始化网络权重 (Xavier Uniform)。"""
-        for m in self.network.modules():
+        # Initialize feature layers
+        for m in self.feature_layers.modules(): # Iterate through feature_layers
             if isinstance(m, nn.Linear):
                 gain = 1.0
-                if len(self.network) > 1 and hasattr(self.network[1], '__class__') and hasattr(nn.init, 'calculate_gain'):
+                # Try to get gain from activation (assuming activation is the second element)
+                if len(self.feature_layers) > 1 and hasattr(self.feature_layers[1], '__class__') and hasattr(nn.init, 'calculate_gain'):
                      try:
-                          # Get activation function name (handle Sequential case)
-                          activation_module = self.network[1]
-                          if isinstance(activation_module, nn.Sequential):
-                               activation_func = activation_module[0] # Assume first layer in seq is activation
-                          else:
-                               activation_func = activation_module
+                          activation_func = self.feature_layers[1]
                           gain = nn.init.calculate_gain(activation_func.__class__.__name__.lower())
                      except ValueError:
                           gain = 1.0 # Default gain if activation not recognized
@@ -216,8 +219,19 @@ class MLP_PINN(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
+        # Initialize output heads separately
+        nn.init.xavier_uniform_(self.state_head.weight, gain=1.0) # Use default gain=1.0 for heads
+        if self.state_head.bias is not None:
+             nn.init.constant_(self.state_head.bias, 0)
+
+        nn.init.xavier_uniform_(self.derivative_head.weight, gain=1.0) # Use default gain=1.0 for heads
+        if self.derivative_head.bias is not None:
+             nn.init.constant_(self.derivative_head.bias, 0)
+
+
     def _prepare_coord_input(self, coords):
         """准备并验证坐标输入以进行预测。"""
+        # (Keep this method as it was, it seems correct)
         expected_keys = []
         if self.input_dim >= 1: expected_keys.append('x')
         if self.input_dim >= 2: expected_keys.append('y')
@@ -232,20 +246,29 @@ class MLP_PINN(nn.Module):
             logging.warning(f"MLP_PINN input_dim={self.input_dim} > 3. Assuming extra inputs are 'param1', 'param2', ...")
 
         tensors_to_cat = []
+        ref_tensor_for_attrs = None # Find a reference tensor to get device/dtype
         for key in expected_keys:
-            if key not in coords:
+            if key in coords:
+                 tensor = coords[key]
+                 tensors_to_cat.append(tensor)
+                 if ref_tensor_for_attrs is None and isinstance(tensor, torch.Tensor):
+                      ref_tensor_for_attrs = tensor
+            else:
                 # 如果是可选参数（k, u, paramX）且未提供，则使用零填充
                 if key in ['k', 'u'] or key.startswith('param'):
-                     # 需要知道 x 的形状来创建零张量
-                     ref_shape = coords.get('x', coords.get('y', coords.get('t'))).shape
-                     if ref_shape is None:
-                          raise ValueError(f"无法确定形状以创建零填充参数 '{key}'")
+                     if ref_tensor_for_attrs is None:
+                          # Try finding any tensor in coords to get attributes
+                          for v in coords.values():
+                               if isinstance(v, torch.Tensor):
+                                    ref_tensor_for_attrs = v
+                                    break
+                          if ref_tensor_for_attrs is None:
+                               raise ValueError(f"无法确定形状/设备/类型以创建零填充参数 '{key}'，因为输入 coords 中没有张量。")
+
                      logging.debug(f"Parameter '{key}' not found in coords, using zeros.")
-                     tensors_to_cat.append(torch.zeros(ref_shape, device=coords[next(iter(coords))].device, dtype=coords[next(iter(coords))].dtype))
+                     tensors_to_cat.append(torch.zeros_like(ref_tensor_for_attrs)) # Use zeros_like the reference
                 else:
                      raise ValueError(f"缺少必需的坐标键 '{key}' (input_dim={self.input_dim})")
-            else:
-                tensors_to_cat.append(coords[key])
 
         if not tensors_to_cat:
              raise ValueError("未找到用于 MLP 输入的张量。")
@@ -260,32 +283,45 @@ class MLP_PINN(nn.Module):
 
     def forward(self, x, mode='predict_coords'):
         """
-        前向传播，适应不同预测模式。
+        前向传播，支持状态和导数双输出。
 
         Args:
             x: 输入数据。
-               - mode='predict_coords': x 是包含坐标张量的字典，例如 {'x': [N,1], 'y': [N,1], 't': [N,1], 'k': [N,1], ...}
-                                        或 {'x': [B,N,1], 'y': [B,N,1], ...}
-               - mode='predict_state': x 是包含初始状态、参数和目标时间的字典，
-                                       例如 {'initial_state': [B,1,H,W], 'params': {'K':..., 'U':...}, 't_target': ...}
+               - mode='predict_coords': x 是包含坐标张量的字典。
+               - mode='predict_state': x 是包含初始状态、参数和目标时间的字典。
             mode (str): 'predict_coords' 或 'predict_state'。
 
         Returns:
-            torch.Tensor: 预测的地形。形状取决于模式。
+            dict or torch.Tensor: 包含 'state' 和/或 'derivative' 的字典，
+                                  或单个张量（如果只请求一个输出）。
         """
         if mode == 'predict_coords':
             if not isinstance(x, dict):
                  raise TypeError("对于 'predict_coords' 模式，输入 x 必须是字典。")
-            model_input = self._prepare_coord_input(x)
-            h_pred = self.network(model_input)
-            return h_pred # Shape [N, C_out] or [B, N, C_out]
+            model_input = self._prepare_coord_input(x) # Pass only x
+            features = self.feature_layers(model_input)
+
+            # 根据输出模式返回结果
+            outputs = {}
+            if self.output_state:
+                outputs['state'] = self.state_head(features)
+            if self.output_derivative:
+                outputs['derivative'] = self.derivative_head(features)
+
+            # 根据需要返回字典或单一张量
+            if len(outputs) == 0:
+                 raise ValueError("模型未配置为输出任何内容 (state=False, derivative=False)")
+            elif len(outputs) == 1:
+                 return next(iter(outputs.values())) # Return the single tensor
+            else:
+                 return outputs # Return the dictionary
 
         elif mode == 'predict_state':
-            # 实现基于网格的状态预测 (方案 2)
+            # 实现基于网格的状态预测
             if not isinstance(x, dict):
                  raise TypeError("对于 'predict_state' 模式，输入 x 必须是字典。")
 
-            initial_state = x.get('initial_state') # 可能未使用，但用于获取形状
+            initial_state = x.get('initial_state')
             params = x.get('params', {})
             t_target = x.get('t_target')
 
@@ -294,7 +330,7 @@ class MLP_PINN(nn.Module):
 
             batch_size, _, height, width = initial_state.shape
             device = initial_state.device
-            dtype = initial_state.dtype # Use dtype from input state
+            dtype = initial_state.dtype
 
             # 创建网格坐标 [0, 1]
             y_coords_norm = torch.linspace(0, 1, height, device=device, dtype=dtype)
@@ -369,21 +405,43 @@ class MLP_PINN(nn.Module):
                     coords[key] = param_tensor
 
             # 使用准备好的坐标调用 predict_coords 模式
-            h_pred_flat = self.forward(coords, mode='predict_coords') # Shape [B, H*W, C_out]
+            # This will return a dict {'state': ..., 'derivative': ...} or a single tensor
+            outputs_flat = self.forward(coords, mode='predict_coords')
 
-            # 重塑回网格形状 [B, C_out, H, W]
-            try:
-                h_pred_grid = h_pred_flat.permute(0, 2, 1).reshape(batch_size, self.output_dim, height, width)
-            except Exception as e:
-                 logging.error(f"在 predict_state 中重塑输出时出错: {e}. Flat shape: {h_pred_flat.shape}")
-                 raise
+            # Reshape outputs back to grid shape [B, C_out, H, W]
+            outputs_grid = {}
+            if isinstance(outputs_flat, dict):
+                if 'state' in outputs_flat:
+                    state_flat = outputs_flat['state']
+                    # Reshape state: [B, H*W, C_out] -> [B, C_out, H*W] -> [B, C_out, H, W]
+                    outputs_grid['state'] = state_flat.permute(0, 2, 1).reshape(batch_size, self.output_dim, height, width)
+                if 'derivative' in outputs_flat:
+                    derivative_flat = outputs_flat['derivative']
+                    # Reshape derivative: [B, H*W, C_out] -> [B, C_out, H*W] -> [B, C_out, H, W]
+                    outputs_grid['derivative'] = derivative_flat.permute(0, 2, 1).reshape(batch_size, self.output_dim, height, width)
+            else: # Single tensor output
+                 # Reshape single output: [B, H*W, C_out] -> [B, C_out, H*W] -> [B, C_out, H, W]
+                 single_output_grid = outputs_flat.permute(0, 2, 1).reshape(batch_size, self.output_dim, height, width)
+                 if self.output_state:
+                      outputs_grid['state'] = single_output_grid
+                 elif self.output_derivative:
+                      outputs_grid['derivative'] = single_output_grid
 
-            return h_pred_grid
+            # 根据请求的输出数量返回
+            if len(outputs_grid) == 0:
+                 raise ValueError("模型未配置为输出任何内容 (state=False, derivative=False)")
+            elif len(outputs_grid) == 1:
+                 return next(iter(outputs_grid.values())) # Return the single tensor
+            else:
+                 return outputs_grid # Return the dictionary
 
         else:
             raise ValueError(f"未知的 forward 模式: {mode}")
 
+
 # --- FastscapePINN ---
+# Note: This model might need updates if MLP_PINN structure changed significantly
+# It currently assumes MLP_PINN is used for predict_coords
 class FastscapePINN(nn.Module):
     """增强版物理信息神经网络，同时支持点预测和状态预测（使用 CNN 编码器-解码器）"""
     def __init__(self, input_dim=3, output_dim=1, hidden_dim=256, num_layers=8,
@@ -394,7 +452,8 @@ class FastscapePINN(nn.Module):
         self.grid_width = grid_width
 
         # 基本MLP网络用于坐标预测
-        self.mlp = MLP_PINN(input_dim, output_dim, num_layers, hidden_dim)
+        # Ensure MLP_PINN is instantiated correctly based on its updated __init__
+        self.mlp = MLP_PINN(input_dim=input_dim, output_dim=output_dim, hidden_layers=num_layers, hidden_neurons=hidden_dim)
 
         # 状态预测的编码器-解码器架构
         self.num_param_channels = num_param_channels
@@ -492,7 +551,15 @@ class FastscapePINN(nn.Module):
     def forward(self, x, mode='predict_coords'):
         if mode == 'predict_coords':
             if not isinstance(x, dict): raise TypeError("对于 'predict_coords' 模式，输入 x 必须是字典。")
-            return self.mlp(x, mode='predict_coords') # Pass dict directly
+            # FastscapePINN's MLP might need specific handling if MLP_PINN now returns dict
+            mlp_output = self.mlp(x, mode='predict_coords')
+            # If MLP returns dict, extract state or handle as needed
+            if isinstance(mlp_output, dict):
+                 # Assuming we only need the state from MLP for coordinate prediction
+                 return mlp_output.get('state') # Or raise error if state not present
+            else:
+                 # If MLP returns a single tensor, assume it's the state
+                 return mlp_output
         elif mode == 'predict_state':
             if isinstance(x, dict):
                 initial_state = x.get('initial_state')
@@ -531,7 +598,12 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
 
         # 基础坐标-参数MLP (x, y, t, k, u -> h)
         # Coordinate MLP now needs separate heads
-        self.coordinate_mlp_base = MLP_PINN(coordinate_input_dim, hidden_dim, num_layers - 1, hidden_dim, activation=activation) # Output hidden_dim
+        # Ensure MLP_PINN is instantiated correctly based on its updated __init__
+        # Instantiate MLP_PINN to output features of size hidden_dim
+        self.coordinate_mlp_base = MLP_PINN(input_dim=coordinate_input_dim, output_dim=hidden_dim, hidden_layers=num_layers - 1, hidden_neurons=hidden_dim, activation=activation)
+        # Set the base MLP to only output state (features) internally
+        self.coordinate_mlp_base.set_output_mode(state=True, derivative=False)
+
         self.state_head = nn.Linear(hidden_dim, output_dim)
         self.derivative_head = nn.Linear(hidden_dim, output_dim)
 
@@ -574,12 +646,17 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         """在参数网格上采样局部值 (使用归一化坐标 [0, 1])"""
         if param_grid is None: return torch.zeros_like(x_coords_norm)
         device = x_coords_norm.device
+        # Ensure param_grid is tensor and on correct device before getting dtype
+        if not isinstance(param_grid, torch.Tensor):
+             param_grid = torch.tensor(param_grid, device=device) # Convert if numpy array etc.
+        else:
+             param_grid = param_grid.to(device)
         dtype = param_grid.dtype # Match param grid dtype
 
         # 确保 param_grid 是 [B, C, H, W]
         if param_grid.ndim == 2: param_grid = param_grid.unsqueeze(0).unsqueeze(0)
         elif param_grid.ndim == 3: param_grid = param_grid.unsqueeze(1)
-        param_grid = param_grid.to(device)
+
 
         # 转换坐标到 [-1, 1] for grid_sample
         x_sample = 2.0 * torch.clamp(x_coords_norm, 0, 1) - 1.0
@@ -604,7 +681,18 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         if isinstance(t_target, (int, float)):
             t_tensor = torch.full((batch_size, 1), float(t_target), device=device, dtype=dtype)
         elif isinstance(t_target, torch.Tensor):
-            t_tensor = t_target.to(device=device, dtype=dtype).view(batch_size, 1)
+            t_target = t_target.to(device=device, dtype=dtype)
+            if t_target.numel() == 1:
+                # Expand scalar tensor to [batch_size, 1]
+                t_tensor = t_target.expand(batch_size, 1)
+            elif t_target.ndim == 1 and t_target.shape[0] == batch_size:
+                 # Reshape [batch_size] to [batch_size, 1]
+                 t_tensor = t_target.view(batch_size, 1)
+            elif t_target.shape == (batch_size, 1):
+                 # Already correct shape
+                 t_tensor = t_target
+            else:
+                 raise ValueError(f"无法处理的目标时间张量形状: {t_target.shape}，批次大小为 {batch_size}")
         else: raise TypeError(f"不支持的目标时间类型: {type(t_target)}")
         return t_tensor * 0.01 # 简单缩放
 
@@ -683,7 +771,7 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         for key in output_keys:
             result_dict[key] = torch.zeros((batch_size, self.output_dim, height, width), device=device, dtype=dtype)
         counts = torch.zeros((batch_size, 1, height, width), device=device, dtype=dtype)
-        
+
         # 使用 Hann 窗口进行平滑拼接，添加边缘缓和处理
         window = torch.hann_window(tile_size, periodic=False, device=device, dtype=dtype)
         # 调整窗口函数，增强中心区域权重，减少边缘效应
@@ -695,23 +783,31 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         h_starts = list(range(0, height, stride))
         w_starts = list(range(0, width, stride))
         # 确保最后一个块能覆盖到图像边缘
-        if h_starts[-1] + tile_size < height:
-            h_starts.append(height - tile_size)
-        if w_starts[-1] + tile_size < width:
-            w_starts.append(width - tile_size)
+        if not h_starts or h_starts[-1] + tile_size < height:
+             h_starts.append(max(0, height - tile_size)) # Ensure start is non-negative
+        if not w_starts or w_starts[-1] + tile_size < width:
+             w_starts.append(max(0, width - tile_size)) # Ensure start is non-negative
+        # Remove duplicates if the last calculated start is the same as the appended one
+        h_starts = sorted(list(set(h_starts)))
+        w_starts = sorted(list(set(w_starts)))
+
 
         for h_start in h_starts:
             for w_start in w_starts:
-                # 确保不超出边界
-                h_start = min(h_start, height - 1)
-                w_start = min(w_start, width - 1)
-                
+                # 确保不超出边界 (already handled by max(0, ...))
+                # h_start = min(h_start, height - 1) # Not needed if max(0,...) used
+                # w_start = min(w_start, width - 1) # Not needed if max(0,...) used
+
                 h_end = min(h_start + tile_size, height)
                 w_end = min(w_start + tile_size, width)
-                
+
                 # 计算当前块的实际尺寸
                 current_tile_h = h_end - h_start
                 current_tile_w = w_end - w_start
+
+                # Skip if tile size is zero in any dimension
+                if current_tile_h <= 0 or current_tile_w <= 0:
+                     continue
 
                 # 提取块
                 h_slice = slice(h_start, h_end)
@@ -722,10 +818,10 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
                 u_tile = u_field[:, :, h_slice, w_slice]
 
                 # 如果块尺寸小于 tile_size，需要填充
-                if current_tile_h < tile_size or current_tile_w < tile_size:
+                pad_h = max(0, tile_size - current_tile_h) # Calculate padding needed
+                pad_w = max(0, tile_size - current_tile_w)
+                if pad_h > 0 or pad_w > 0:
                      # 使用反射填充，更好地保持边界连续性
-                     pad_h = tile_size - current_tile_h
-                     pad_w = tile_size - current_tile_w
                      initial_tile = F.pad(initial_tile, (0, pad_w, 0, pad_h), mode='reflect')
                      k_tile = F.pad(k_tile, (0, pad_w, 0, pad_h), mode='reflect')
                      u_tile = F.pad(u_tile, (0, pad_w, 0, pad_h), mode='reflect')
@@ -734,7 +830,7 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
                 tile_output_dict = self._process_with_cnn(initial_tile, k_tile, u_tile, t_target)
 
                 # 如果填充了，裁剪回原始块尺寸
-                if current_tile_h < tile_size or current_tile_w < tile_size:
+                if pad_h > 0 or pad_w > 0:
                      for key in tile_output_dict:
                           if key in tile_output_dict:
                               tile_output_dict[key] = tile_output_dict[key][:, :, :current_tile_h, :current_tile_w]
@@ -751,7 +847,7 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
                          target_slice = result_dict[key][:, :, h_slice, w_slice]
                          tile_res = tile_output_dict[key]
                          win = current_window
-                         
+
                          if target_slice.shape[-2:] != tile_res.shape[-2:] or target_slice.shape[-2:] != win.shape[-2:]:
                               raise RuntimeError(f"Shape mismatch during tiled accumulation for key '{key}'. "
                                                  f"Target: {target_slice.shape}, Tile: {tile_res.shape}, Window: {win.shape}")
@@ -759,7 +855,7 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
                          result_dict[key][:, :, h_slice, w_slice] += tile_res * win
                     else:
                          logging.warning(f"Key '{key}' expected but not found in tile output dictionary during tiling.")
-                
+
                 # 累加窗口权重，用于后续归一化
                 counts[:, :, h_slice, w_slice] += current_window
 
@@ -768,7 +864,7 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         if zero_counts.any():
             logging.warning(f"Found {zero_counts.sum().item()} pixels with zero or near-zero weight counts. Adding bias.")
             counts = torch.where(zero_counts, torch.ones_like(counts) * 1e-8, counts)
-        
+
         # 平均重叠区域
         final_output_dict = {}
         for key in output_keys:
@@ -818,16 +914,16 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         if mode == 'predict_coords':
             # 1. 准备并标准化坐标和参数输入
             if not isinstance(x, dict): raise TypeError("对于 'predict_coords' 模式，输入 x 必须是字典。")
-            
+
             # 使用统一的坐标标准化函数
             from .utils import standardize_coordinate_system
             coords = standardize_coordinate_system(
-                x, 
-                domain_x=self.domain_x, 
+                x,
+                domain_x=self.domain_x,
                 domain_y=self.domain_y,
                 normalize=True  # 归一化到 [0,1] 范围
             )
-            
+
             # 使用归一化坐标采样参数
             x_coords_norm = coords['x']
             y_coords_norm = coords['y']
@@ -837,7 +933,11 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
 
             # 2. 通过基础 MLP 获取共享特征
             # Need to call the base MLP's forward method correctly
-            mlp_features = self.coordinate_mlp_base(augmented_coords, mode='predict_coords') # Pass dict
+            # MLP_PINN forward now returns a dict or tensor based on its output mode
+            # We need the features BEFORE the final heads of MLP_PINN
+            mlp_input = self.coordinate_mlp_base._prepare_coord_input(augmented_coords)
+            mlp_features = self.coordinate_mlp_base.feature_layers(mlp_input)
+
 
             # 3. 通过各自的头计算输出
             if self.output_state:
@@ -874,30 +974,31 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
 # ADDED: Create a TimeDerivative version of the basic MLP_PINN model
 class TimeDerivativeMLP_PINN(TimeDerivativePINN):
     """支持同时输出状态及其时间导数的简单MLP版本"""
-    
+
     def __init__(self, input_dim=3, output_dim=1, hidden_layers=8, hidden_neurons=256, activation=nn.Tanh()):
         super().__init__()
+        self.input_dim = input_dim # Store input_dim
         self.output_dim = output_dim
-        
+
         # 共享特征提取网络
         self.feature_layers = nn.Sequential()
-        
+
         # 输入层
         self.feature_layers.append(nn.Linear(input_dim, hidden_neurons))
         self.feature_layers.append(activation)
-        
+
         # 隐藏层
         for _ in range(hidden_layers - 1):
             self.feature_layers.append(nn.Linear(hidden_neurons, hidden_neurons))
             self.feature_layers.append(activation)
-        
+
         # 状态和导数的输出头
         self.state_head = nn.Linear(hidden_neurons, output_dim)
         self.derivative_head = nn.Linear(hidden_neurons, output_dim)
-        
+
         # 初始化权重
         self._init_weights()
-    
+
     def _init_weights(self):
         """初始化网络权重"""
         for m in self.feature_layers:
@@ -905,83 +1006,101 @@ class TimeDerivativeMLP_PINN(TimeDerivativePINN):
                 nn.init.xavier_uniform_(m.weight)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-        
+
         # 初始化输出头
         nn.init.xavier_uniform_(self.state_head.weight)
-        nn.init.constant_(self.state_head.bias, 0)
-        
+        if self.state_head.bias is not None:
+             nn.init.constant_(self.state_head.bias, 0)
+
         nn.init.xavier_uniform_(self.derivative_head.weight)
-        nn.init.constant_(self.derivative_head.bias, 0)
-    
+        if self.derivative_head.bias is not None:
+             nn.init.constant_(self.derivative_head.bias, 0)
+
     def _prepare_input(self, x, mode):
         """准备模型输入"""
         if mode == 'predict_coords':
             if not isinstance(x, dict):
                 raise TypeError("对于'predict_coords'模式，输入x必须是字典")
-            
+
             # 提取必要的坐标
             expected_keys = ['x', 'y', 't']
             tensors_to_cat = []
-            
+            ref_tensor_for_attrs = None # Find a reference tensor
+
             for key in expected_keys:
-                if key not in x:
-                    raise ValueError(f"缺少必需的坐标键'{key}'")
-                tensors_to_cat.append(x[key])
-            
+                 if key in x:
+                      tensor = x[key]
+                      tensors_to_cat.append(tensor)
+                      if ref_tensor_for_attrs is None and isinstance(tensor, torch.Tensor):
+                           ref_tensor_for_attrs = tensor
+                 else:
+                      raise ValueError(f"缺少必需的坐标键'{key}'")
+
             # 如果需要额外的输入维度，例如参数
-            if hasattr(self, 'input_dim') and self.input_dim > 3:
-                for i in range(3, self.input_dim):
-                    key = f'param{i-2}'
-                    if key in x:
-                        tensors_to_cat.append(x[key])
-                    else:
-                        # 使用零张量作为默认值
-                        tensors_to_cat.append(torch.zeros_like(x['x']))
-            
+            # Use self.input_dim which is stored in __init__
+            if self.input_dim > 3:
+                 if ref_tensor_for_attrs is None:
+                      raise ValueError("无法确定形状/设备/类型以创建零填充参数，因为输入 coords 中没有张量。")
+                 for i in range(3, self.input_dim):
+                     key = f'param{i-2}'
+                     if key in x:
+                         tensors_to_cat.append(x[key])
+                     else:
+                         # 使用零张量作为默认值
+                         tensors_to_cat.append(torch.zeros_like(ref_tensor_for_attrs))
+
             return torch.cat(tensors_to_cat, dim=-1)
-            
+
         elif mode == 'predict_state':
             # 实现与MLP_PINN类似的网格状态预测逻辑
             if not isinstance(x, dict):
                 raise TypeError("对于'predict_state'模式，输入x必须是字典")
-            
+
             initial_state = x.get('initial_state')
             params = x.get('params', {})
             t_target = x.get('t_target')
-            
+
             if initial_state is None or t_target is None:
                 raise ValueError("对于'predict_state'模式，缺少'initial_state'或't_target'输入")
-            
+
             batch_size, _, height, width = initial_state.shape
             device = initial_state.device
             dtype = initial_state.dtype
-            
+
             # 创建网格坐标
             y_coords = torch.linspace(0, 1, height, device=device, dtype=dtype)
             x_coords = torch.linspace(0, 1, width, device=device, dtype=dtype)
             grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing='ij')
-            
+
             # 展平为点列表
-            x_flat = grid_x.reshape(-1, 1).expand(batch_size, -1, 1)
-            y_flat = grid_y.reshape(-1, 1).expand(batch_size, -1, 1)
-            
+            x_flat = grid_x.reshape(1, -1, 1).expand(batch_size, -1, -1) # Use reshape(1, -1, 1)
+            y_flat = grid_y.reshape(1, -1, 1).expand(batch_size, -1, -1) # Use reshape(1, -1, 1)
+
             # 准备时间输入
             if isinstance(t_target, (int, float)):
                 t_flat = torch.full((batch_size, height*width, 1), float(t_target), device=device, dtype=dtype)
             elif isinstance(t_target, torch.Tensor):
-                t_flat = t_target.view(batch_size, 1, 1).expand(-1, height*width, 1)
+                 if t_target.numel() == 1:
+                      t_flat = t_target.expand(batch_size, height * width, 1)
+                 elif t_target.ndim == 1 and t_target.shape[0] == batch_size: # [B]
+                      t_flat = t_target.view(batch_size, 1, 1).expand(-1, height * width, -1)
+                 elif t_target.shape == (batch_size, 1): # [B, 1]
+                      t_flat = t_target.unsqueeze(1).expand(-1, height * width, -1)
+                 else:
+                      raise ValueError(f"不支持的目标时间形状: {t_target.shape}")
             else:
                 raise TypeError(f"不支持的t_target类型: {type(t_target)}")
-            
+
             # 组合输入
             model_input = torch.cat([x_flat, y_flat, t_flat], dim=-1)
-            
+
             # 如果使用了额外参数
-            if hasattr(self, 'input_dim') and self.input_dim > 3:
+            # Use self.input_dim which is stored in __init__
+            if self.input_dim > 3:
                 for i in range(3, self.input_dim):
                     param_name = f'param{i-2}'
                     param_val = params.get(param_name, 0.0)
-                    
+
                     if isinstance(param_val, (int, float)):
                         param_tensor = torch.full((batch_size, height*width, 1), float(param_val), device=device, dtype=dtype)
                     elif isinstance(param_val, torch.Tensor):
@@ -989,42 +1108,42 @@ class TimeDerivativeMLP_PINN(TimeDerivativePINN):
                         param_tensor = param_val.expand(batch_size, height*width, 1)
                     else:
                         raise TypeError(f"不支持的参数类型'{param_name}': {type(param_val)}")
-                    
+
                     model_input = torch.cat([model_input, param_tensor], dim=-1)
-            
+
             return model_input, (batch_size, height, width)
-        
+
         else:
             raise ValueError(f"未知的forward模式: {mode}")
-    
+
     def forward(self, x, mode='predict_coords'):
         """前向传播，支持状态和导数双输出"""
         if mode == 'predict_coords':
             # 预测坐标点处的值
             model_input = self._prepare_input(x, mode)
             features = self.feature_layers(model_input)
-            
+
             # 根据输出模式返回结果
             outputs = {}
             if self.output_state:
                 outputs['state'] = self.state_head(features)
             if self.output_derivative:
                 outputs['derivative'] = self.derivative_head(features)
-            
+
             # 根据需要返回字典或单一张量
             if len(outputs) == 1:
                 return next(iter(outputs.values()))
             else:
                 return outputs
-                
+
         elif mode == 'predict_state':
             # 预测整个状态网格
             model_input, shape_info = self._prepare_input(x, mode)
             batch_size, height, width = shape_info
-            
+
             # 处理展平的输入
             features = self.feature_layers(model_input)
-            
+
             # 获取输出
             outputs = {}
             if self.output_state:
@@ -1033,12 +1152,12 @@ class TimeDerivativeMLP_PINN(TimeDerivativePINN):
             if self.output_derivative:
                 derivative_flat = self.derivative_head(features)
                 outputs['derivative'] = derivative_flat.reshape(batch_size, height, width, self.output_dim).permute(0, 3, 1, 2)
-            
+
             # 根据需要返回字典或单一张量
             if len(outputs) == 1:
                 return next(iter(outputs.values()))
             else:
                 return outputs
-        
+
         else:
             raise ValueError(f"未知的forward模式: {mode}")

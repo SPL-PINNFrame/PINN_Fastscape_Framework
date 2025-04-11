@@ -101,7 +101,7 @@ training:
   learning_rate: 1.0e-4
   weight_decay: 0.0 # No weight decay for simple test
   lr_scheduler: null # No scheduler
-  pde_loss_method: 'grid_focused' # Use the new grid-based PDE loss
+  pde_loss_method: 'dual_output' # Use the dual output loss method
   loss_weights:
     data: 1.0
     physics: 0.1 # Weight for the PDE residual loss
