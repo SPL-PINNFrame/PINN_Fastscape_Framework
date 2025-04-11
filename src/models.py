@@ -4,7 +4,7 @@ import logging
 import torch.nn.functional as F
 import math # For sqrt(2) in AdaptiveFastscapePINN tiling (if needed)
 
-# --- Base Class for Dual Output --- 
+# --- Improved Base Class for Dual Output --- 
 class TimeDerivativePINN(nn.Module):
     """能同时输出状态及其时间导数的PINN基类"""
     
@@ -12,6 +12,8 @@ class TimeDerivativePINN(nn.Module):
         super().__init__()
         self.output_state = True
         self.output_derivative = True
+        # Add output mode tracker for debugging
+        self._mode_changes = [] 
     
     def get_output_mode(self):
         """获取当前输出模式"""
@@ -23,23 +25,150 @@ class TimeDerivativePINN(nn.Module):
         return modes
     
     def set_output_mode(self, state=True, derivative=True):
-        """设置输出模式（状态和/或导数）"""
+        """设置输出模式（状态和/或导数）
+        
+        Args:
+            state (bool): 是否输出状态
+            derivative (bool): 是否输出时间导数
+            
+        Raises:
+            ValueError: 如果state和derivative均为False
+        """
         if not state and not derivative:
             raise ValueError("至少需要一个输出模式为True（state或derivative）")
+        
+        # Track mode changes for debugging
+        old_modes = self.get_output_mode()
         self.output_state = state
         self.output_derivative = derivative
+        new_modes = self.get_output_mode()
         
+        # Log mode changes
+        if old_modes != new_modes:
+            self._mode_changes.append((old_modes, new_modes))
+            logging.debug(f"TimeDerivativePINN output mode changed: {old_modes} -> {new_modes}")
+    
+    def check_output_format(self, outputs, required_outputs=None):
+        """检查输出格式是否符合预期
+        
+        Args:
+            outputs: 模型输出（字典或张量）
+            required_outputs (list, optional): 需要的输出类型列表，例如 ['state', 'derivative']
+                                            
+        Returns:
+            bool: 输出格式是否符合预期
+            
+        Raises:
+            ValueError: 如果输出格式不符合预期且required_outputs不为None
+        """
+        if required_outputs is None:
+            # 只检查模式配置和输出类型匹配
+            if isinstance(outputs, dict):
+                if self.output_state and 'state' not in outputs:
+                    if required_outputs:
+                        raise ValueError("模型配置为输出状态，但输出字典中没有'state'键")
+                    return False
+                if self.output_derivative and 'derivative' not in outputs:
+                    if required_outputs:
+                        raise ValueError("模型配置为输出导数，但输出字典中没有'derivative'键")
+                    return False
+                return True
+            else:
+                # 单一输出应该是state（如果只配置了state模式）
+                if self.output_state and not self.output_derivative:
+                    return True
+                # 否则，应该是字典格式
+                if required_outputs:
+                    raise ValueError(f"模型配置为输出 {self.get_output_mode()}，但返回了单一张量而非字典")
+                return False
+        else:
+            # 检查是否有所有需要的输出
+            if isinstance(outputs, dict):
+                for output_type in required_outputs:
+                    if output_type not in outputs:
+                        if required_outputs:
+                            raise ValueError(f"需要的输出'{output_type}'不在模型输出字典中")
+                        return False
+                return True
+            else:
+                # 单一输出只能满足单一需求
+                if len(required_outputs) == 1 and required_outputs[0] == 'state':
+                    return True
+                if required_outputs:
+                    raise ValueError(f"需要输出类型 {required_outputs}，但模型返回了单一张量")
+                return False
+    
     def forward(self, *args, **kwargs):
         """前向传播，需要在子类中实现"""
         raise NotImplementedError("子类必须实现forward方法")
-
-# --- Existing imports and code follow ---
-
-import torch
-import torch.nn as nn
-import logging
-import torch.nn.functional as F
-import math # For sqrt(2) in AdaptiveFastscapePINN tiling (if needed)
+    
+    def predict_derivative_fd(self, x, delta_t=1e-3, mode='predict_coords'):
+        """使用有限差分近似计算时间导数（用于测试）
+        
+        Args:
+            x: 输入数据（取决于mode）
+            delta_t (float): 时间步长
+            mode (str): 预测模式，与forward相同
+            
+        Returns:
+            torch.Tensor: 时间导数近似值
+        """
+        # 保存当前输出模式
+        original_state = self.output_state
+        original_derivative = self.output_derivative
+        
+        # 只输出状态用于有限差分
+        self.set_output_mode(state=True, derivative=False)
+        
+        # 创建前向和后向时间输入副本
+        if mode == 'predict_coords':
+            # 坐标模式下，修改't'键
+            if not isinstance(x, dict) or 't' not in x:
+                raise ValueError("predict_derivative_fd在'predict_coords'模式下需要't'键")
+            
+            t = x['t']
+            
+            # 前向时间步
+            x_forward = x.copy()
+            x_forward['t'] = t + delta_t/2
+            
+            # 后向时间步
+            x_backward = x.copy()
+            x_backward['t'] = t - delta_t/2
+            
+        elif mode == 'predict_state':
+            # 状态模式下，修改't_target'键
+            if not isinstance(x, dict) or 't_target' not in x:
+                raise ValueError("predict_derivative_fd在'predict_state'模式下需要't_target'键")
+            
+            t_target = x['t_target']
+            
+            # 前向时间步
+            x_forward = x.copy()
+            x_forward['t_target'] = t_target + delta_t/2
+            
+            # 后向时间步
+            x_backward = x.copy()
+            x_backward['t_target'] = t_target - delta_t/2
+        
+        else:
+            raise ValueError(f"predict_derivative_fd不支持的模式: {mode}")
+        
+        # 计算前向和后向预测
+        with torch.no_grad():  # 防止创建计算图，这只是用于测试
+            pred_forward = self.forward(x_forward, mode=mode)
+            pred_backward = self.forward(x_backward, mode=mode)
+        
+        # 使用中心差分计算导数
+        if isinstance(pred_forward, dict) and 'state' in pred_forward:
+            derivative_fd = (pred_forward['state'] - pred_backward['state']) / delta_t
+        else:
+            derivative_fd = (pred_forward - pred_backward) / delta_t
+        
+        # 恢复原始模式
+        self.set_output_mode(state=original_state, derivative=original_derivative)
+        
+        return derivative_fd
 
 # --- MLP_PINN ---
 class MLP_PINN(nn.Module):
@@ -741,3 +870,175 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
              return next(iter(outputs.values())) # Return the single tensor
         else:
              return outputs # Return the dictionary
+
+# ADDED: Create a TimeDerivative version of the basic MLP_PINN model
+class TimeDerivativeMLP_PINN(TimeDerivativePINN):
+    """支持同时输出状态及其时间导数的简单MLP版本"""
+    
+    def __init__(self, input_dim=3, output_dim=1, hidden_layers=8, hidden_neurons=256, activation=nn.Tanh()):
+        super().__init__()
+        self.output_dim = output_dim
+        
+        # 共享特征提取网络
+        self.feature_layers = nn.Sequential()
+        
+        # 输入层
+        self.feature_layers.append(nn.Linear(input_dim, hidden_neurons))
+        self.feature_layers.append(activation)
+        
+        # 隐藏层
+        for _ in range(hidden_layers - 1):
+            self.feature_layers.append(nn.Linear(hidden_neurons, hidden_neurons))
+            self.feature_layers.append(activation)
+        
+        # 状态和导数的输出头
+        self.state_head = nn.Linear(hidden_neurons, output_dim)
+        self.derivative_head = nn.Linear(hidden_neurons, output_dim)
+        
+        # 初始化权重
+        self._init_weights()
+    
+    def _init_weights(self):
+        """初始化网络权重"""
+        for m in self.feature_layers:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+        
+        # 初始化输出头
+        nn.init.xavier_uniform_(self.state_head.weight)
+        nn.init.constant_(self.state_head.bias, 0)
+        
+        nn.init.xavier_uniform_(self.derivative_head.weight)
+        nn.init.constant_(self.derivative_head.bias, 0)
+    
+    def _prepare_input(self, x, mode):
+        """准备模型输入"""
+        if mode == 'predict_coords':
+            if not isinstance(x, dict):
+                raise TypeError("对于'predict_coords'模式，输入x必须是字典")
+            
+            # 提取必要的坐标
+            expected_keys = ['x', 'y', 't']
+            tensors_to_cat = []
+            
+            for key in expected_keys:
+                if key not in x:
+                    raise ValueError(f"缺少必需的坐标键'{key}'")
+                tensors_to_cat.append(x[key])
+            
+            # 如果需要额外的输入维度，例如参数
+            if hasattr(self, 'input_dim') and self.input_dim > 3:
+                for i in range(3, self.input_dim):
+                    key = f'param{i-2}'
+                    if key in x:
+                        tensors_to_cat.append(x[key])
+                    else:
+                        # 使用零张量作为默认值
+                        tensors_to_cat.append(torch.zeros_like(x['x']))
+            
+            return torch.cat(tensors_to_cat, dim=-1)
+            
+        elif mode == 'predict_state':
+            # 实现与MLP_PINN类似的网格状态预测逻辑
+            if not isinstance(x, dict):
+                raise TypeError("对于'predict_state'模式，输入x必须是字典")
+            
+            initial_state = x.get('initial_state')
+            params = x.get('params', {})
+            t_target = x.get('t_target')
+            
+            if initial_state is None or t_target is None:
+                raise ValueError("对于'predict_state'模式，缺少'initial_state'或't_target'输入")
+            
+            batch_size, _, height, width = initial_state.shape
+            device = initial_state.device
+            dtype = initial_state.dtype
+            
+            # 创建网格坐标
+            y_coords = torch.linspace(0, 1, height, device=device, dtype=dtype)
+            x_coords = torch.linspace(0, 1, width, device=device, dtype=dtype)
+            grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing='ij')
+            
+            # 展平为点列表
+            x_flat = grid_x.reshape(-1, 1).expand(batch_size, -1, 1)
+            y_flat = grid_y.reshape(-1, 1).expand(batch_size, -1, 1)
+            
+            # 准备时间输入
+            if isinstance(t_target, (int, float)):
+                t_flat = torch.full((batch_size, height*width, 1), float(t_target), device=device, dtype=dtype)
+            elif isinstance(t_target, torch.Tensor):
+                t_flat = t_target.view(batch_size, 1, 1).expand(-1, height*width, 1)
+            else:
+                raise TypeError(f"不支持的t_target类型: {type(t_target)}")
+            
+            # 组合输入
+            model_input = torch.cat([x_flat, y_flat, t_flat], dim=-1)
+            
+            # 如果使用了额外参数
+            if hasattr(self, 'input_dim') and self.input_dim > 3:
+                for i in range(3, self.input_dim):
+                    param_name = f'param{i-2}'
+                    param_val = params.get(param_name, 0.0)
+                    
+                    if isinstance(param_val, (int, float)):
+                        param_tensor = torch.full((batch_size, height*width, 1), float(param_val), device=device, dtype=dtype)
+                    elif isinstance(param_val, torch.Tensor):
+                        # TODO: 处理张量参数
+                        param_tensor = param_val.expand(batch_size, height*width, 1)
+                    else:
+                        raise TypeError(f"不支持的参数类型'{param_name}': {type(param_val)}")
+                    
+                    model_input = torch.cat([model_input, param_tensor], dim=-1)
+            
+            return model_input, (batch_size, height, width)
+        
+        else:
+            raise ValueError(f"未知的forward模式: {mode}")
+    
+    def forward(self, x, mode='predict_coords'):
+        """前向传播，支持状态和导数双输出"""
+        if mode == 'predict_coords':
+            # 预测坐标点处的值
+            model_input = self._prepare_input(x, mode)
+            features = self.feature_layers(model_input)
+            
+            # 根据输出模式返回结果
+            outputs = {}
+            if self.output_state:
+                outputs['state'] = self.state_head(features)
+            if self.output_derivative:
+                outputs['derivative'] = self.derivative_head(features)
+            
+            # 根据需要返回字典或单一张量
+            if len(outputs) == 1:
+                return next(iter(outputs.values()))
+            else:
+                return outputs
+                
+        elif mode == 'predict_state':
+            # 预测整个状态网格
+            model_input, shape_info = self._prepare_input(x, mode)
+            batch_size, height, width = shape_info
+            
+            # 处理展平的输入
+            features = self.feature_layers(model_input)
+            
+            # 获取输出
+            outputs = {}
+            if self.output_state:
+                state_flat = self.state_head(features)
+                outputs['state'] = state_flat.reshape(batch_size, height, width, self.output_dim).permute(0, 3, 1, 2)
+            if self.output_derivative:
+                derivative_flat = self.derivative_head(features)
+                outputs['derivative'] = derivative_flat.reshape(batch_size, height, width, self.output_dim).permute(0, 3, 1, 2)
+            
+            # 根据需要返回字典或单一张量
+            if len(outputs) == 1:
+                return next(iter(outputs.values()))
+            else:
+                return outputs
+        
+        else:
+            raise ValueError(f"未知的forward模式: {mode}")

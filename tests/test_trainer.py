@@ -127,72 +127,63 @@ def test_generate_collocation_points(dummy_config_trainer, dummy_model, dummy_da
 # We need to mock the actual loss functions to check if the correct one is called
 # based on the configuration. We also mock the model's forward pass.
 
-# Update mocks: Remove adaptive, keep others
-# Patch the functions where they are looked up in the module under test (src.trainer)
+# FIXED: Update test to properly check all loss method selections
 @patch('src.trainer.compute_pde_residual_grid_focused', return_value=torch.tensor(0.1, requires_grad=True))
 @patch('src.trainer.compute_pde_residual_dual_output', return_value=torch.tensor(0.2, requires_grad=True))
 @patch('src.trainer.compute_pde_residual', return_value=torch.tensor(0.4, requires_grad=True)) # Interpolation mock
-def test_trainer_pde_loss_selection(mock_interp, mock_dual, mock_grid, # Correct arguments for remaining mocks
+def test_trainer_pde_loss_selection(mock_interp, mock_dual, mock_grid, 
                                      dummy_config_trainer, dummy_adaptive_model, dummy_dataloader):
     """
     Tests if the trainer calls the correct PDE loss function based on config.
-    Uses the Adaptive model because the current hardcoded path uses dual output.
+    Checks all PDE loss method selection paths.
     """
     config = dummy_config_trainer.copy()
     model = dummy_adaptive_model # Use adaptive model which supports dual output
 
-    # We will use the actual model forward pass now, but mock the loss function call.
-    # Ensure the dummy model fixture provides a model compatible with the trainer's expectations.
-    # The dummy_adaptive_model fixture seems appropriate.
+    # --- Test Case 1: grid_focused method ---
+    config['training']['pde_loss_method'] = 'grid_focused'
+    trainer_grid = PINNTrainer(model, config, dummy_dataloader, None)
+    # Reset mock counts
+    mock_grid.reset_mock()
+    mock_dual.reset_mock()
+    mock_interp.reset_mock()
+    # Prepare model and run epoch
+    model.set_output_mode(state=True, derivative=False)
+    trainer_grid._run_epoch(0, is_training=True)
+    # Check the right function was called
+    assert mock_grid.call_count > 0, "grid_focused method should be called"
+    assert mock_dual.call_count == 0, "dual_output method should not be called"
+    assert mock_interp.call_count == 0, "interpolation method should not be called"
 
-    # --- Test Case 1: Default (grid_focused) - CURRENTLY OVERRIDDEN ---
-    # config['training']['pde_loss_method'] = 'grid_focused'
-    # trainer_grid = PINNTrainer(model, config, dummy_dataloader, None)
-    # trainer_grid._run_epoch(0, is_training=True)
-    # mock_grid.assert_called_once() # This would fail currently
-    # mock_dual.assert_not_called()
-    # Removed reference to mock_adaptive
-    # mock_interp.assert_not_called()
-    # mock_grid.reset_mock()
-
-    # --- Test Case 2: Dual Output (Current hardcoded behavior) ---
-    config['training']['pde_loss_method'] = 'dual_output' # Set config explicitly
+    # --- Test Case 2: dual_output method ---
+    config['training']['pde_loss_method'] = 'dual_output'
     trainer_dual = PINNTrainer(model, config, dummy_dataloader, None)
-    # Explicitly set the mode the trainer expects for dual_output PDE loss
-    # This simulates the behavior where the trainer or model setup ensures the correct output flags are set.
+    # Reset mock counts
+    mock_grid.reset_mock()
+    mock_dual.reset_mock()
+    mock_interp.reset_mock()
+    # Prepare model and run epoch
     model.set_output_mode(state=True, derivative=True)
     trainer_dual._run_epoch(0, is_training=True)
-    # Check that it was called at least once (main calculation + potentially logging)
-    mock_dual.assert_called()
-    # mock_dual.assert_called_once() # Changed to assert_called() as logging might call it again
-    mock_grid.assert_not_called()
-    # Removed reference to mock_adaptive
-    mock_interp.assert_not_called()
-    # Removed assertion for set_output_mode call as it's no longer a mock
-    # Removed reset_mock calls as they were causing errors or unnecessary
+    # Check the right function was called
+    assert mock_dual.call_count > 0, "dual_output method should be called"
+    assert mock_grid.call_count == 0, "grid_focused method should not be called"
+    assert mock_interp.call_count == 0, "interpolation method should not be called"
 
-    # --- Test Case 3: Adaptive (SHOULD FAIL until trainer logic fixed) ---
-    # config['training']['pde_loss_method'] = 'adaptive'
-    # trainer_adaptive = PINNTrainer(model, config, dummy_dataloader, None)
-    # trainer_adaptive._run_epoch(0, is_training=True)
-    # Removed reference to mock_adaptive
-    # mock_dual.assert_not_called()
-    # mock_grid.assert_not_called()
-    # mock_interp.assert_not_called()
-    # Removed reference to mock_adaptive
-
-    # --- Test Case 4: Interpolation (SHOULD FAIL until trainer logic fixed) ---
-    # config['training']['pde_loss_method'] = 'interpolation'
-    # trainer_interp = PINNTrainer(model, config, dummy_dataloader, None)
-    # trainer_interp._run_epoch(0, is_training=True)
-    # mock_interp.assert_called_once() # This would fail currently
-    # mock_dual.assert_not_called()
-    # mock_grid.assert_not_called()
-    # Removed reference to mock_adaptive
-    # mock_interp.reset_mock()
-
-    # TODO: Once PINNTrainer._run_epoch is fixed to respect pde_loss_method,
-    # uncomment and enable the tests for 'grid_focused', 'adaptive', and 'interpolation'.
+    # --- Test Case 3: interpolation method ---
+    config['training']['pde_loss_method'] = 'interpolation'
+    trainer_interp = PINNTrainer(model, config, dummy_dataloader, None)
+    # Reset mock counts
+    mock_grid.reset_mock()
+    mock_dual.reset_mock()
+    mock_interp.reset_mock()
+    # Prepare model and run epoch
+    model.set_output_mode(state=True, derivative=False)
+    trainer_interp._run_epoch(0, is_training=True)
+    # Check the right function was called
+    assert mock_interp.call_count > 0, "interpolation method should be called"
+    assert mock_grid.call_count == 0, "grid_focused method should not be called"
+    assert mock_dual.call_count == 0, "dual_output method should not be called"
 
 def test_trainer_run_epoch_basic(dummy_config_trainer, dummy_adaptive_model, dummy_dataloader):
     """Tests a basic run of _run_epoch without crashing."""
@@ -212,10 +203,77 @@ def test_trainer_run_epoch_basic(dummy_config_trainer, dummy_adaptive_model, dum
         assert isinstance(val_loss, float) and not np.isnan(val_loss)
         assert 'total_loss' in val_comps
 
-# TODO: Add tests for checkpoint saving and loading
-# - Test save_checkpoint creates a file
-# - Test load_checkpoint restores epoch, best_val_loss, model state, optimizer state, scheduler state
+# ADDED: Tests for checkpoint saving and loading
+def test_save_and_load_checkpoint(tmp_path, dummy_config_trainer, dummy_model, dummy_dataloader):
+    """Tests checkpoint saving and loading functionality."""
+    # Setup trainer with tmp_path
+    config = dummy_config_trainer.copy()
+    config['results_dir'] = str(tmp_path)
+    
+    trainer = PINNTrainer(dummy_model, config, dummy_dataloader, dummy_dataloader)
+    
+    # Train for one epoch to have something to save
+    with patch.object(loss_module, 'compute_pde_residual_grid_focused', return_value=torch.tensor(0.1, requires_grad=True)), \
+         patch.object(loss_module, 'compute_data_loss', return_value=torch.tensor(0.5, requires_grad=True)):
+        trainer._run_epoch(epoch=0, is_training=True)
+    
+    # Save checkpoint
+    checkpoint_path = os.path.join(tmp_path, trainer.run_name, 'checkpoints', 'test_checkpoint.pth')
+    trainer.save_checkpoint(0, 'test_checkpoint.pth')
+    
+    # Verify checkpoint exists
+    assert os.path.exists(checkpoint_path), "Checkpoint file should be created"
+    
+    # Create a new trainer and load checkpoint
+    new_trainer = PINNTrainer(dummy_model, config, dummy_dataloader, dummy_dataloader)
+    assert new_trainer.start_epoch == 0  # Should be 0 initially
+    
+    new_trainer.load_checkpoint(checkpoint_path)
+    assert new_trainer.start_epoch == 1  # Should be epoch+1 after loading
 
-# TODO: Add tests for LR scheduler stepping logic (epoch-based and plateau-based)
+# ADDED: Test for LR scheduler stepping
+def test_lr_scheduler_stepping(dummy_config_trainer, dummy_model, dummy_dataloader):
+    """Tests that LR schedulers step properly during training."""
+    # Setup trainer with StepLR scheduler
+    config = dummy_config_trainer.copy()
+    config['training']['lr_scheduler'] = 'step'
+    config['lr_scheduler_config'] = {'step_size': 1, 'gamma': 0.5}
+    
+    trainer = PINNTrainer(dummy_model, config, dummy_dataloader, dummy_dataloader)
+    initial_lr = trainer.optimizer.param_groups[0]['lr']
+    
+    # Mock methods to avoid actual computation
+    trainer._run_epoch = MagicMock(return_value=(0.1, {'total_loss': 0.1}))
+    trainer.save_checkpoint = MagicMock()
+    
+    # Run one epoch of training
+    trainer.train()
+    
+    # Check that LR was reduced
+    new_lr = trainer.optimizer.param_groups[0]['lr']
+    assert new_lr == initial_lr * 0.5, "LR should be halved after one epoch with StepLR"
 
-# TODO: Add tests for mixed precision training (check if scaler is used)
+# ADDED: Test for mixed precision training
+def test_mixed_precision_training(dummy_config_trainer, dummy_model, dummy_dataloader):
+    """Tests that mixed precision training works correctly."""
+    # Setup trainer with mixed precision
+    config = dummy_config_trainer.copy()
+    config['use_mixed_precision'] = True
+    
+    trainer = PINNTrainer(dummy_model, config, dummy_dataloader, dummy_dataloader)
+    assert trainer.use_amp, "Mixed precision should be enabled"
+    assert trainer.scaler.is_enabled(), "AMP scaler should be enabled"
+    
+    # Run one epoch with mocked losses to verify functionality
+    with patch.object(loss_module, 'compute_pde_residual_grid_focused', return_value=torch.tensor(0.1, requires_grad=True)), \
+         patch.object(loss_module, 'compute_data_loss', return_value=torch.tensor(0.5, requires_grad=True)), \
+         patch.object(torch.cuda.amp.GradScaler, 'scale', return_value=torch.tensor(0.6, requires_grad=True)) as mock_scale, \
+         patch.object(torch.cuda.amp.GradScaler, 'step') as mock_step, \
+         patch.object(torch.cuda.amp.GradScaler, 'update') as mock_update:
+        
+        trainer._run_epoch(epoch=0, is_training=True)
+        
+        # Check scaler methods were called
+        assert mock_scale.call_count > 0, "GradScaler.scale() should be called"
+        assert mock_step.call_count > 0, "GradScaler.step() should be called"
+        assert mock_update.call_count > 0, "GradScaler.update() should be called"
