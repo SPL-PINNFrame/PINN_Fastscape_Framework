@@ -254,45 +254,41 @@ def compute_grid_temporal_derivative(h_grid, t_grid):
 
     try:
         # Calculate gradient. The output shape should match h_grid.
-        grads = torch.autograd.grad( # Store result in grads
+        grads = torch.autograd.grad(
             outputs=h_grid,
             inputs=t_grid,
             grad_outputs=ones_like_output,
             create_graph=True,
-            retain_graph=True,
-            allow_unused=True # MODIFIED: Allow t_grid to be unused
+            retain_graph=True, 
+            allow_unused=False  # 修改: 不再允许 t_grid 未使用
         )
-        dh_dt = grads[0] # Get the gradient
-
-        # Add a check and warning if the gradient is None
-        if dh_dt is None:
-            logging.warning("Temporal gradient (dh/dt) is None. This likely means 't_grid' did not influence 'h_grid' in the model's forward pass. Returning zero gradient.")
-            # Return zero tensor with correct shape and device, requires_grad=True
-            dh_dt = torch.zeros_like(h_grid, requires_grad=True)
-
-        # Ensure output shape matches h_grid if t_grid was scalar/broadcasted
+        
+        # 如果代码执行到这里，说明 t_grid 确实影响了 h_grid (否则会引发异常)
+        dh_dt = grads[0]
+        
+        # 确保输出形状与 h_grid 匹配（如果 t_grid 是标量/广播）
         if dh_dt.shape != h_grid.shape:
-             # This might happen if t_grid was scalar and autograd returns summed grad
-             # If t_grid was scalar, the gradient should be the same for all elements
-             # We might need to expand the gradient or rethink how t_grid is handled
-             logging.warning(f"Shape mismatch after temporal grad: dh_dt={dh_dt.shape}, h_grid={h_grid.shape}. Check t_grid influence.")
-             # Attempt to repeat if dh_dt is scalar-like
-             if dh_dt.numel() == 1:
-                  dh_dt = dh_dt.expand_as(h_grid)
-             elif dh_dt.shape == (h_grid.shape[0], 1, 1, 1): # Check for the specific shape [B, 1, 1, 1]
-                  dh_dt = dh_dt.expand_as(h_grid) # Expand if it matches the summed gradient shape
-             else:
-                  # If shape mismatch is complex, return zero loss as fallback
-                  logging.error(f"Cannot resolve shape mismatch in temporal derivative (dh_dt: {dh_dt.shape}, h_grid: {h_grid.shape}). Returning zero loss.")
-                  # Return zero loss with grad connection
-                  return h_grid.sum() * 0.0
-
+            logging.warning(f"形状不匹配: dh_dt={dh_dt.shape}, h_grid={h_grid.shape}. 尝试调整形状。")
+            
+            # 尝试处理特定形状的梯度
+            if dh_dt.numel() == 1:  # 标量梯度
+                dh_dt = dh_dt.expand_as(h_grid)
+            elif dh_dt.shape == (h_grid.shape[0], 1, 1, 1):  # [B, 1, 1, 1] 形状
+                dh_dt = dh_dt.expand_as(h_grid)
+            else:
+                # 如果无法解决形状不匹配，记录错误并返回备选输出
+                logging.error(f"无法解决时间导数的形状不匹配 (dh_dt: {dh_dt.shape}, h_grid: {h_grid.shape})。")
+                # 返回连接了梯度的零张量
+                return h_grid.new_zeros(h_grid.shape, requires_grad=True)
+        
         return dh_dt
 
     except RuntimeError as e:
-        logging.error(f"Error computing grid temporal derivative: {e}. Check if t_grid influences h_grid.", exc_info=True)
-        # Return zero loss with grad connection
-        return h_grid.sum() * 0.0
+        logging.error(f"计算网格时间导数时出错: {e}. t_grid 可能未影响 h_grid。", exc_info=True)
+        logging.warning("无法计算时间导数。请改用 dual_output 模式，该模式由模型直接预测导数。")
+        
+        # 返回连接了梯度的零张量，但警告用户应该使用 dual_output 模式
+        return h_grid.new_zeros(h_grid.shape, requires_grad=True)
 
 
 def compute_pde_residual_grid_focused(h_pred_grid, t_grid, physics_params):
