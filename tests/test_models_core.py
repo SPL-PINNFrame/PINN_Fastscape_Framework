@@ -175,3 +175,64 @@ def test_fastscape_pinn_forward_state(dummy_config_fastscape, dummy_state_input)
 
 # TODO: Add tests for handling different parameter types/shapes in FastscapePINN predict_state
 # TODO: Add tests for edge cases (e.g., missing parameters)
+
+# 添加一个测试用例，检查TimeDerivativePINN的输出模式和预期是否一致
+def test_time_derivative_pinn_output_mode():
+    """测试TimeDerivativePINN基类的输出模式功能"""
+    from src.models import TimeDerivativePINN
+    
+    # 创建一个实现了TimeDerivativePINN的测试类
+    class TestPINN(TimeDerivativePINN):
+        def __init__(self):
+            super().__init__()
+            self.output_state = True
+            self.output_derivative = True
+            
+        def forward(self, x, mode='test'):
+            # 简单的前向实现，根据输出模式返回结果
+            outputs = {}
+            if self.output_state:
+                outputs['state'] = torch.ones(1, 1)
+            if self.output_derivative:
+                outputs['derivative'] = torch.zeros(1, 1)
+            
+            if len(outputs) == 1:
+                return next(iter(outputs.values()))
+            return outputs
+    
+    # 创建模型实例
+    model = TestPINN()
+    
+    # 测试默认模式（两个输出）
+    output = model(None)
+    assert isinstance(output, dict), "默认模式应该返回字典"
+    assert 'state' in output, "默认模式应该包含状态输出"
+    assert 'derivative' in output, "默认模式应该包含导数输出"
+    
+    # 测试只输出状态
+    model.set_output_mode(state=True, derivative=False)
+    output = model(None)
+    assert not isinstance(output, dict), "单一输出模式应该返回张量而非字典"
+    # 验证与state相同
+    assert torch.all(output == torch.ones(1, 1)), "单状态模式应该只返回状态张量"
+    
+    # 测试只输出导数
+    model.set_output_mode(state=False, derivative=True)
+    output = model(None)
+    assert not isinstance(output, dict), "单一输出模式应该返回张量而非字典"
+    # 验证与derivative相同
+    assert torch.all(output == torch.zeros(1, 1)), "单导数模式应该只返回导数张量"
+    
+    # 测试get_output_mode
+    model.set_output_mode(state=True, derivative=True)
+    modes = model.get_output_mode()
+    assert 'state' in modes, "modes应包含'state'"
+    assert 'derivative' in modes, "modes应包含'derivative'"
+    assert len(modes) == 2, "应该有两个模式"
+    
+    # 测试无输出（应该抛出错误）
+    with pytest.raises(ValueError, match="至少需要一个输出模式为True"):
+        model.set_output_mode(state=False, derivative=False)
+        
+    # 确保继续设置为有效状态
+    model.set_output_mode(state=True, derivative=True)

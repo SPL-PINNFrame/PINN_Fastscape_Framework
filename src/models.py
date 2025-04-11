@@ -24,6 +24,8 @@ class TimeDerivativePINN(nn.Module):
     
     def set_output_mode(self, state=True, derivative=True):
         """设置输出模式（状态和/或导数）"""
+        if not state and not derivative:
+            raise ValueError("至少需要一个输出模式为True（state或derivative）")
         self.output_state = state
         self.output_derivative = derivative
         
@@ -429,32 +431,15 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         self.downsampler = nn.Upsample(size=(base_resolution, base_resolution), mode='bilinear', align_corners=False)
 
     def _ensure_shape(self, param, target_shape, batch_size, device, dtype):
-        """确保参数形状适配目标形状 (B, 1, H, W)。"""
-        # Use the provided device and dtype arguments, not from self.parameters()
-        target_device = device
-        target_dtype = dtype
-
-        if param is None:
-            return torch.zeros((batch_size, 1, *target_shape), device=device, dtype=dtype)
-        if isinstance(param, (int, float)):
-            return torch.full((batch_size, 1, *target_shape), float(param), device=device, dtype=dtype)
-        if isinstance(param, torch.Tensor):
-            param = param.to(device=device, dtype=dtype)
-            if param.ndim == 0: # Scalar tensor
-                 return param.view(1, 1, 1, 1).expand(batch_size, 1, *target_shape)
-            elif param.ndim == 1 and param.shape[0] == batch_size: # Batch of scalars [B]
-                 return param.view(batch_size, 1, 1, 1).expand(-1, 1, *target_shape)
-            # Add handling for [B, 1] shape
-            elif param.ndim == 2 and param.shape == (batch_size, 1): # Batch of scalars [B, 1]
-                 return param.view(batch_size, 1, 1, 1).expand(-1, 1, *target_shape)
-            elif param.ndim == 2 and param.shape == target_shape: # Spatial field [H, W]
-                 return param.unsqueeze(0).unsqueeze(0).expand(batch_size, 1, -1, -1)
-            elif param.ndim == 3 and param.shape[0] == batch_size and param.shape[1:] == target_shape: # Spatial field [B, H, W]
-                 return param.unsqueeze(1)
-            if param.ndim == 4 and param.shape == (batch_size, 1, *target_shape): return param
-            try: return param.expand(batch_size, 1, *target_shape)
-            except RuntimeError: raise ValueError(f"无法将参数形状 {param.shape} 调整或广播为目标形状 {(batch_size, 1, *target_shape)}")
-        raise TypeError(f"不支持的参数类型: {type(param)}")
+        """确保参数具有正确的形状，用于网格预测"""
+        from .utils import prepare_parameter
+        return prepare_parameter(
+            param_value=param,
+            target_shape=target_shape,
+            batch_size=batch_size,
+            device=device,
+            dtype=dtype
+        )
 
     def _sample_at_coords(self, param_grid, x_coords_norm, y_coords_norm):
         """在参数网格上采样局部值 (使用归一化坐标 [0, 1])"""
@@ -569,15 +554,33 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         for key in output_keys:
             result_dict[key] = torch.zeros((batch_size, self.output_dim, height, width), device=device, dtype=dtype)
         counts = torch.zeros((batch_size, 1, height, width), device=device, dtype=dtype)
-        # 使用 Hann 窗口进行平滑拼接
+        
+        # 使用 Hann 窗口进行平滑拼接，添加边缘缓和处理
         window = torch.hann_window(tile_size, periodic=False, device=device, dtype=dtype)
+        # 调整窗口函数，增强中心区域权重，减少边缘效应
+        window = window**0.75  # 幂次调整使窗口中心更平坦，边缘更陡峭
         window2d = window[:, None] * window[None, :] # H, W
 
-        for h_start in range(0, height - overlap_pixels, stride): # Adjust loop bounds
-            for w_start in range(0, width - overlap_pixels, stride):
+        # 修改循环逻辑，确保包含整个图像，避免漏掉末尾行列
+        # 计算需要处理的起始位置以覆盖整个图像
+        h_starts = list(range(0, height, stride))
+        w_starts = list(range(0, width, stride))
+        # 确保最后一个块能覆盖到图像边缘
+        if h_starts[-1] + tile_size < height:
+            h_starts.append(height - tile_size)
+        if w_starts[-1] + tile_size < width:
+            w_starts.append(width - tile_size)
+
+        for h_start in h_starts:
+            for w_start in w_starts:
+                # 确保不超出边界
+                h_start = min(h_start, height - 1)
+                w_start = min(w_start, width - 1)
+                
                 h_end = min(h_start + tile_size, height)
                 w_end = min(w_start + tile_size, width)
-                # Adjust tile size if near boundary
+                
+                # 计算当前块的实际尺寸
                 current_tile_h = h_end - h_start
                 current_tile_w = w_end - w_start
 
@@ -589,59 +592,63 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
                 k_tile = k_field[:, :, h_slice, w_slice]
                 u_tile = u_field[:, :, h_slice, w_slice]
 
-                # 如果块尺寸小于 tile_size，需要填充或调整 CNN 输入
+                # 如果块尺寸小于 tile_size，需要填充
                 if current_tile_h < tile_size or current_tile_w < tile_size:
-                     # Option 1: Pad the tile
+                     # 使用反射填充，更好地保持边界连续性
                      pad_h = tile_size - current_tile_h
                      pad_w = tile_size - current_tile_w
-                     initial_tile = F.pad(initial_tile, (0, pad_w, 0, pad_h), mode='replicate')
-                     k_tile = F.pad(k_tile, (0, pad_w, 0, pad_h), mode='replicate')
-                     u_tile = F.pad(u_tile, (0, pad_w, 0, pad_h), mode='replicate')
-                     # Option 2: Skip or use different processing (simpler: pad)
+                     initial_tile = F.pad(initial_tile, (0, pad_w, 0, pad_h), mode='reflect')
+                     k_tile = F.pad(k_tile, (0, pad_w, 0, pad_h), mode='reflect')
+                     u_tile = F.pad(u_tile, (0, pad_w, 0, pad_h), mode='reflect')
 
                 # 处理块 (returns dict)
                 tile_output_dict = self._process_with_cnn(initial_tile, k_tile, u_tile, t_target)
 
                 # 如果填充了，裁剪回原始块尺寸
-                # 如果填充了，裁剪回原始块尺寸 (for each tensor in the dict)
                 if current_tile_h < tile_size or current_tile_w < tile_size:
                      for key in tile_output_dict:
-                          # Check if key exists before cropping
                           if key in tile_output_dict:
                               tile_output_dict[key] = tile_output_dict[key][:, :, :current_tile_h, :current_tile_w]
                           else:
                               logging.warning(f"Key '{key}' not found in tile output during cropping.")
 
-                # 获取当前块的窗口
+                # 获取当前块的窗口，调整大小匹配当前块
                 current_window = window2d[:current_tile_h, :current_tile_w].view(1, 1, current_tile_h, current_tile_w)
 
-                # 加权累加结果 (for each tensor in the dict)
+                # 加权累加结果
                 for key in output_keys:
                     if key in tile_output_dict:
-                         # Ensure shapes match before accumulation
+                         # 确保形状匹配
                          target_slice = result_dict[key][:, :, h_slice, w_slice]
                          tile_res = tile_output_dict[key]
                          win = current_window
-                         # Broadcasting check (should match if logic is correct)
+                         
                          if target_slice.shape[-2:] != tile_res.shape[-2:] or target_slice.shape[-2:] != win.shape[-2:]:
                               raise RuntimeError(f"Shape mismatch during tiled accumulation for key '{key}'. "
                                                  f"Target: {target_slice.shape}, Tile: {tile_res.shape}, Window: {win.shape}")
+                         # 累加带权重的结果
                          result_dict[key][:, :, h_slice, w_slice] += tile_res * win
                     else:
                          logging.warning(f"Key '{key}' expected but not found in tile output dictionary during tiling.")
+                
+                # 累加窗口权重，用于后续归一化
                 counts[:, :, h_slice, w_slice] += current_window
 
-        # 平均重叠区域 (for each tensor in the dict)
+        # 添加额外的检查以防零除
+        zero_counts = counts < 1e-8
+        if zero_counts.any():
+            logging.warning(f"Found {zero_counts.sum().item()} pixels with zero or near-zero weight counts. Adding bias.")
+            counts = torch.where(zero_counts, torch.ones_like(counts) * 1e-8, counts)
+        
+        # 平均重叠区域
         final_output_dict = {}
         for key in output_keys:
-            final_output_dict[key] = result_dict[key] / (counts + 1e-8) # Add epsilon
+            final_output_dict[key] = result_dict[key] / counts  # 平均权重
 
-        # Return single tensor if only one output key, else return dict
+        # 返回结果
         if len(final_output_dict) == 1:
             return next(iter(final_output_dict.values()))
         return final_output_dict
-        result = result / (counts + 1e-8) # Add epsilon to avoid division by zero
-        return result
 
     def _predict_state_adaptive(self, initial_state, params, t_target):
         """优化的网格状态预测，支持多分辨率处理"""
@@ -680,17 +687,21 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
         outputs = {}
 
         if mode == 'predict_coords':
-            # 1. 准备坐标和参数输入
+            # 1. 准备并标准化坐标和参数输入
             if not isinstance(x, dict): raise TypeError("对于 'predict_coords' 模式，输入 x 必须是字典。")
-            coords = {k: v for k, v in x.items() if k in ['x', 'y', 't']}
-            if 'x' not in coords or 'y' not in coords: raise ValueError("缺少 'x' 或 'y' 坐标。")
-            # Normalize coordinates before sampling
-            x_coords_phys = coords['x']
-            y_coords_phys = coords['y']
-            x_coords_norm = (x_coords_phys - self.domain_x[0]) / (self.domain_x[1] - self.domain_x[0] + self.epsilon)
-            y_coords_norm = (y_coords_phys - self.domain_y[0]) / (self.domain_y[1] - self.domain_y[0] + self.epsilon)
-
-            # Sample using normalized coordinates
+            
+            # 使用统一的坐标标准化函数
+            from .utils import standardize_coordinate_system
+            coords = standardize_coordinate_system(
+                x, 
+                domain_x=self.domain_x, 
+                domain_y=self.domain_y,
+                normalize=True  # 归一化到 [0,1] 范围
+            )
+            
+            # 使用归一化坐标采样参数
+            x_coords_norm = coords['x']
+            y_coords_norm = coords['y']
             k_value = self._sample_at_coords(x.get('k_grid'), x_coords_norm, y_coords_norm)
             u_value = self._sample_at_coords(x.get('u_grid'), x_coords_norm, y_coords_norm)
             augmented_coords = {**coords, 'k': k_value, 'u': u_value}

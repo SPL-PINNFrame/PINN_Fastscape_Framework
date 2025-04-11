@@ -10,7 +10,7 @@ import random # For collocation point sampling
 
 # Import necessary components from the project
 # Import specific model types and loss functions
-from .models import FastscapePINN, AdaptiveFastscapePINN, MLP_PINN # Add AdaptiveFastscapePINN
+from .models import FastscapePINN, AdaptiveFastscapePINN, MLP_PINN, TimeDerivativePINN # Add TimeDerivativePINN
 # Import all relevant loss functions
 # Import relevant loss functions, excluding the removed adaptive one
 from .losses import (
@@ -52,101 +52,101 @@ class LossScaler:
 class PINNTrainer:
     """Handles the training and validation loops for the PINN model."""
     def __init__(self, model, config, train_loader, val_loader):
-        self.config = config
-        self.train_config = config.get('training', {}) # Store training config section
-        self.device = get_device(config) # Use utility function
-        self.model = model.to(self.device)
-
+        """初始化PINN训练器。
+        
+        Args:
+            model: PINN 模型
+            config: 配置字典，包含训练参数、物理参数等
+            train_loader: 训练数据加载器
+            val_loader: 验证数据加载器
+        """
+        self.model = model
         self.train_loader = train_loader
-        self.val_loader = val_loader # Validation might only use data loss
-
-        # Determine model type for conditional logic later
-        if isinstance(self.model, AdaptiveFastscapePINN):
-            self.model_type = 'adaptive'
-            logging.info("Trainer initialized with AdaptiveFastscapePINN model.")
-        elif isinstance(self.model, FastscapePINN):
-             self.model_type = 'original' # Refers to the CNN+MLP model
-             logging.info("Trainer initialized with FastscapePINN model.")
-        elif isinstance(self.model, MLP_PINN):
-             self.model_type = 'mlp_only' # Handle pure MLP case if needed
-             logging.info("Trainer initialized with MLP_PINN model.")
+        self.val_loader = val_loader
+        self.config = config
+        
+        # 检查模型类型并确定它的输出能力
+        self.is_dual_output_capable = isinstance(model, TimeDerivativePINN)
+        if self.is_dual_output_capable:
+            logging.info("检测到双输出模型 (TimeDerivativePINN)。模型可以同时输出状态和导数。")
+            initial_modes = model.get_output_mode()
+            logging.info(f"模型初始输出模式: {initial_modes}")
         else:
-             self.model_type = 'unknown'
-             logging.warning(f"Trainer initialized with unknown model type: {type(self.model)}")
-
-        # Optimizer
-        optimizer_name = self.train_config.get('optimizer', 'Adam').lower()
-        lr = self.train_config.get('learning_rate', 1e-3)
-        weight_decay = self.train_config.get('weight_decay', 0)
-        if optimizer_name == 'adam':
-            self.optimizer = optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
-        elif optimizer_name == 'adamw':
-             self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
-        elif optimizer_name == 'lbfgs':
-             self.optimizer = optim.LBFGS(self.model.parameters(), lr=lr, line_search_fn="strong_wolfe") # Add line search for stability
-             logging.warning("LBFGS optimizer selected, requires closure for step.")
+            logging.info("模型不是 TimeDerivativePINN 的实例，可能不支持双输出模式。")
+        
+        # Training config
+        if 'trainer' in config:
+            self.train_config = config['trainer']
         else:
-            raise ValueError(f"Unsupported optimizer: {optimizer_name}")
-        logging.info(f"Optimizer: {optimizer_name}, LR: {lr}, Weight Decay: {weight_decay}")
+            self.train_config = config
+            logging.warning("配置中没有'trainer'部分，使用整个配置字典作为训练配置。")
 
+        # Physics parameters
+        if 'physics' in config:
+            self.physics_params = config['physics']
+        else:
+            # Attempt to find physics parameters in the main config
+            self.physics_params = {
+                'U': config.get('uplift_rate', 0.0),
+                'K_f': config.get('K_f', 1e-5),
+                'm': config.get('m', 0.5),
+                'n': config.get('n', 1.0),
+                'K_d': config.get('K_d', 0.01),
+                'dx': config.get('dx', 1.0),
+                'dy': config.get('dy', 1.0),
+                'precip': config.get('precip', 1.0)
+            }
+            logging.warning("配置中没有'physics'部分，从主配置中提取物理参数。")
 
-        # Learning Rate Scheduler
-        scheduler_config = self.train_config.get('lr_scheduler', None)
-        self.scheduler = None
-        if scheduler_config:
-            scheduler_name = scheduler_config.get('name', 'StepLR').lower()
-            if scheduler_name == 'steplr':
-                self.scheduler = optim.lr_scheduler.StepLR(
-                    self.optimizer,
-                    step_size=scheduler_config.get('step_size', 30),
-                    gamma=scheduler_config.get('gamma', 0.1)
-                )
-            elif scheduler_name == 'reducelronplateau':
-                 self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                     self.optimizer,
-                     mode=scheduler_config.get('mode', 'min'),
-                     factor=scheduler_config.get('factor', 0.1),
-                     patience=scheduler_config.get('patience', 10)
-                 )
-            # Add other schedulers like CosineAnnealingLR if needed
-            elif scheduler_name == 'cosineannealinglr':
-                 self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                      self.optimizer,
-                      T_max=scheduler_config.get('T_max', config.get('epochs', 100)), # Usually total epochs
-                      eta_min=scheduler_config.get('eta_min', 0)
-                 )
-            logging.info(f"LR Scheduler: {scheduler_name} configured.")
+        # Setup computational device
+        self.device = self._setup_device()
+        self.model = self.model.to(self.device)
 
+        # Setup optimizer
+        self.optimizer_type = self.train_config.get('optimizer', 'adam')
+        self.learning_rate = self.train_config.get('learning_rate', 1e-3)
+        self.weight_decay = self.train_config.get('weight_decay', 0.0)
+        self.optimizer = self._setup_optimizer()
 
-        # Loss components
-        self.physics_params = config.get('physics_params', {})
-        # --- Domain info for collocation points (still needed for interpolation/adaptive methods) ---
-        self.domain_x = self.physics_params.get('domain_x', [0.0, 100.0])
-        self.domain_y = self.physics_params.get('domain_y', [0.0, 100.0])
-        self.total_time = self.physics_params.get('total_time', 1000.0)
-        self.n_collocation = self.train_config.get('n_collocation_points', 10000)
-        # --- PDE Loss Method Selection ---
-        self.pde_loss_method = self.train_config.get('pde_loss_method', 'grid_focused').lower()
-        # MODIFIED: Add 'dual_output' to the list of valid methods
-        if self.pde_loss_method not in ['grid_focused', 'interpolation', 'adaptive', 'dual_output']:
-             logging.warning(f"Invalid pde_loss_method '{self.pde_loss_method}'. Defaulting to 'grid_focused'.")
-             self.pde_loss_method = 'grid_focused'
-        logging.info(f"Using PDE loss method: {self.pde_loss_method}")
-        # ---------------------------------
-        self.loss_weight_scheduler = DynamicWeightScheduler(config) # Pass full config
-        self.loss_scaler = LossScaler(enabled=self.train_config.get('use_loss_scaling', False))
+        # Setup LR scheduler
+        self.scheduler_type = self.train_config.get('lr_scheduler', 'step')
+        self.scheduler = self._setup_lr_scheduler()
 
-        # Logging and Checkpointing
-        self.run_name = config.get('run_name', f'pinn_run_{int(time.time())}')
-        self.output_dir = os.path.join(config.get('output_dir', 'results'), self.run_name)
-        self.checkpoint_dir = os.path.join(self.output_dir, 'checkpoints')
-        self.log_dir = os.path.join(self.output_dir, 'logs')
-        os.makedirs(self.checkpoint_dir, exist_ok=True)
-        os.makedirs(self.log_dir, exist_ok=True)
-        self.writer = SummaryWriter(log_dir=self.log_dir)
-        logging.info(f"Run Name: {self.run_name}")
-        logging.info(f"Outputs will be saved to: {self.output_dir}")
+        # Loss weights and scheduler
+        self.loss_weight_scheduler = DynamicWeightScheduler(self.train_config)
+        self.loss_scaler = LossScaler(enabled=self.train_config.get('enable_loss_scaling', False))
 
+        # PDE loss related settings
+        self.pde_loss_method = self.train_config.get('pde_loss_method', 'dual_output' if self.is_dual_output_capable else 'grid_focused')
+        self.n_collocation = self.train_config.get('n_collocation', 1000)
+        
+        # 根据选择的损失计算方法设置模型输出模式
+        self._configure_model_for_selected_pde_method()
+        
+        # 检查物理损失方法与模型兼容性
+        if self.pde_loss_method == 'dual_output' and not self.is_dual_output_capable:
+            logging.warning("选择了'dual_output'损失方法，但模型不是TimeDerivativePINN子类。将回退到'grid_focused'方法。")
+            self.pde_loss_method = 'grid_focused'
+            
+        # 显示选择的损失计算方法
+        logging.info(f"使用损失计算方法: {self.pde_loss_method}")
+
+        # Other training params
+        self.total_time = self.physics_params.get('total_time', 1.0)
+        self.max_epochs = self.train_config.get('max_epochs', 100)
+        self.checkpoint_freq = self.train_config.get('checkpoint_freq', 10)
+        self.results_dir = self.train_config.get('results_dir', 'results')
+        
+        self.domain_x = (0.0, 1.0)  # Default domain, override with actual data
+        self.domain_y = (0.0, 1.0)  # Default domain, override with actual data
+        # Try to extract domain from data
+        try:
+            sample_batch = next(iter(self.train_loader))
+            if isinstance(sample_batch, dict) and 'domain_x' in sample_batch and 'domain_y' in sample_batch:
+                self.domain_x = tuple(sample_batch['domain_x'].numpy())
+                self.domain_y = tuple(sample_batch['domain_y'].numpy())
+        except (StopIteration, AttributeError) as e:
+            logging.warning(f"无法从加载器提取域信息：{e}。使用默认域。")
 
         # Mixed Precision
         self.use_amp = self.train_config.get('use_mixed_precision', False)
@@ -163,6 +163,24 @@ class PINNTrainer:
         load_path = config.get('load_checkpoint', None)
         if load_path:
             self.load_checkpoint(load_path)
+
+    def _configure_model_for_selected_pde_method(self):
+        """根据选择的PDE损失计算方法配置模型输出模式"""
+        if not self.is_dual_output_capable:
+            logging.debug("模型不是TimeDerivativePINN的子类，跳过输出模式配置。")
+            return
+            
+        if self.pde_loss_method == 'dual_output':
+            # 双输出模式：同时需要状态和导数
+            self.model.set_output_mode(state=True, derivative=True)
+            logging.info("已将模型设置为输出状态和导数，用于双输出损失计算。")
+        elif self.pde_loss_method == 'grid_focused' or self.pde_loss_method == 'interpolation':
+            # 这些方法只需要状态输出，内部自动计算导数
+            self.model.set_output_mode(state=True, derivative=False)
+            logging.info(f"已将模型设置为仅输出状态，用于{self.pde_loss_method}损失计算。")
+        else:
+            # 未知方法，保持默认设置
+            logging.warning(f"未知的PDE损失计算方法: {self.pde_loss_method}，保持模型默认输出模式。")
 
     def _generate_collocation_points(self, n_points):
         """Generates random collocation points within the defined domain."""
@@ -639,6 +657,100 @@ class PINNTrainer:
             # Reset start epoch and best loss if loading fails
             self.start_epoch = 0
             self.best_val_loss = float('inf')
+
+    def _setup_device(self):
+        """设置计算设备"""
+        device_str = self.train_config.get('device', 'auto')
+        if device_str == 'auto':
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        else:
+            device = torch.device(device_str)
+        logging.info(f"使用设备: {device}")
+        return device
+        
+    def _setup_optimizer(self):
+        """设置优化器"""
+        optimizer_name = self.optimizer_type.lower()
+        params = self.model.parameters()
+        
+        if optimizer_name == 'adam':
+            optimizer = optim.Adam(
+                params, 
+                lr=self.learning_rate, 
+                weight_decay=self.weight_decay
+            )
+        elif optimizer_name == 'adamw':
+            optimizer = optim.AdamW(
+                params, 
+                lr=self.learning_rate, 
+                weight_decay=self.weight_decay
+            )
+        elif optimizer_name == 'sgd':
+            momentum = self.train_config.get('momentum', 0.9)
+            optimizer = optim.SGD(
+                params, 
+                lr=self.learning_rate, 
+                momentum=momentum, 
+                weight_decay=self.weight_decay
+            )
+        elif optimizer_name == 'lbfgs':
+            optimizer = optim.LBFGS(
+                params, 
+                lr=self.learning_rate, 
+                line_search_fn="strong_wolfe"
+            )
+        else:
+            raise ValueError(f"不支持的优化器类型: {optimizer_name}")
+            
+        logging.info(f"已创建优化器: {optimizer_name}, 学习率: {self.learning_rate}, 权重衰减: {self.weight_decay}")
+        return optimizer
+        
+    def _setup_lr_scheduler(self):
+        """设置学习率调度器"""
+        scheduler_config = self.train_config.get('lr_scheduler_config', {})
+        scheduler_name = self.scheduler_type.lower()
+        
+        if scheduler_name == 'step':
+            step_size = scheduler_config.get('step_size', 30)
+            gamma = scheduler_config.get('gamma', 0.1)
+            scheduler = optim.lr_scheduler.StepLR(
+                self.optimizer,
+                step_size=step_size,
+                gamma=gamma
+            )
+            logging.info(f"使用StepLR调度器, step_size={step_size}, gamma={gamma}")
+            
+        elif scheduler_name == 'plateau':
+            patience = scheduler_config.get('patience', 10)
+            factor = scheduler_config.get('factor', 0.1)
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer,
+                mode='min',
+                factor=factor,
+                patience=patience,
+                verbose=True
+            )
+            logging.info(f"使用ReduceLROnPlateau调度器, patience={patience}, factor={factor}")
+            
+        elif scheduler_name == 'cosine':
+            t_max = scheduler_config.get('t_max', self.max_epochs)
+            eta_min = scheduler_config.get('eta_min', 0)
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer,
+                T_max=t_max,
+                eta_min=eta_min
+            )
+            logging.info(f"使用CosineAnnealingLR调度器, T_max={t_max}, eta_min={eta_min}")
+            
+        elif scheduler_name == 'none':
+            scheduler = None
+            logging.info("不使用学习率调度器")
+            
+        else:
+            logging.warning(f"未知的调度器类型: {scheduler_name}, 不使用学习率调度")
+            scheduler = None
+            
+        return scheduler
 
 
 if __name__ == '__main__':

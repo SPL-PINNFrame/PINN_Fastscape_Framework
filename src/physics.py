@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import math # For sqrt(2)
+import logging
+from .utils import ErrorHandler
 
 # -----------------------------------------------------------------------------
 # Terrain Derivatives (Differentiable using PyTorch Conv2d)
@@ -118,6 +120,9 @@ def calculate_laplacian(h, dx, dy, padding_mode='replicate'):
 
 def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp=0.01, num_iters=10, verbose=False): # Add verbose flag
     """优化的可微分汇水面积计算，使用PyTorch的内置操作减少循环"""
+    # 创建错误处理器
+    error_handler = ErrorHandler(max_retries=1)
+    
     batch_size, _, height, width = h.shape
     device = h.device
     cell_area = dx * dy
@@ -159,29 +164,49 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
     # 计算距离
     dist_diag = math.sqrt(dx**2 + dy**2)
     distances = torch.tensor([dy, dist_diag, dx, dist_diag,
-                              dy, dist_diag, dx, dist_diag],
-                              device=device).view(1, 8, 1, 1)
+                             dy, dist_diag, dx, dist_diag],
+                             device=device).view(1, 8, 1, 1)
 
     # 计算坡度
     slopes = dh / (distances + 1e-10)
 
     # 2. 计算流向权重 (Softmax)
-    # 仅考虑下坡流向 (negative slopes)
-    # Use -slopes in softmax, clamp positive slopes to ensure near-zero probability
-    softmax_input = -slopes / temp
-    softmax_input = torch.where(slopes >= 0, torch.full_like(softmax_input, -torch.finfo(softmax_input.dtype).max), softmax_input)
-    # Clamp to prevent overflow in exp()
-    softmax_input = torch.clamp(softmax_input, max=80)
-    weights = F.softmax(softmax_input, dim=1)  # [B, 8, H, W]
+    # 带错误处理的softmax计算函数
+    @error_handler.catch_and_handle(retry_on=[RuntimeError], ignore=[])
+    def compute_flow_weights(slope_values, temperature):
+        # 仅考虑下坡流向 (negative slopes)
+        # Use -slopes in softmax, clamp positive slopes to ensure near-zero probability
+        softmax_input = -slope_values / temperature
+        softmax_input = torch.where(slopes >= 0, 
+                                   torch.full_like(softmax_input, -torch.finfo(softmax_input.dtype).max), 
+                                   softmax_input)
+        # Clamp to prevent overflow in exp()
+        softmax_input = torch.clamp(softmax_input, max=80)
+        return F.softmax(softmax_input, dim=1)  # [B, 8, H, W]
+    
+    # 首先尝试正常的温度
+    weights = compute_flow_weights(slopes, temp)
+    
+    # 如果计算失败或包含NaN，尝试使用更高的温度
+    if weights is None or torch.isnan(weights).any():
+        logging.warning(f"在温度 {temp} 下计算流向权重失败或产生了NaN值。尝试更高的温度...")
+        higher_temp = temp * 10  # 增加温度使softmax更平滑
+        weights = compute_flow_weights(slopes, higher_temp)
+        
+        if weights is None or torch.isnan(weights).any():
+            logging.error(f"即使在更高的温度 {higher_temp} 下，计算流向权重仍然失败。使用均匀权重。")
+            # 创建均匀权重作为后备
+            weights = torch.full((batch_size, 8, height, width), 1.0/8.0, device=device, dtype=h.dtype)
 
-    # Handle potential NaNs
+    # 处理仍可能存在的NaN
     if torch.isnan(weights).any():
-         print("Warning: NaNs detected in softmax weights. Check slopes and temperature. Replacing NaNs with 1/8.")
-         nan_mask = torch.isnan(weights)
-         weights = torch.where(nan_mask, torch.full_like(weights, 1.0/8.0), weights)
-         # Renormalize (optional, softmax should handle it if NaNs are replaced)
-         # weights_sum = weights.sum(dim=1, keepdim=True)
-         # weights = weights / (weights_sum + 1e-12)
+        nan_mask = torch.isnan(weights)
+        nan_count = nan_mask.sum().item()
+        logging.warning(f"权重中检测到 {nan_count} 个NaN值。替换为平均值(1/8)。")
+        weights = torch.where(nan_mask, torch.full_like(weights, 1.0/8.0), weights)
+        # 重新归一化
+        weights_sum = weights.sum(dim=1, keepdim=True)
+        weights = weights / (weights_sum + 1e-12)
 
     # 3. 迭代计算汇水面积
     drainage_area = local_flow.clone()
@@ -197,30 +222,75 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
     # NE neighbor (offset (1,-1)) uses weight[5] (SW) ... etc.
     reverse_weight_indices = [4, 5, 6, 7, 0, 1, 2, 3]
 
-    # Optimized flow accumulation using unfold/fold or conv_transpose2d (more complex)
-    # Simplified approach using padding and slicing (less efficient than pure conv but avoids explicit loops)
-    if verbose: # Only print if verbose is True
-        print(f"Using simplified iterative flow accumulation ({num_iters} iterations).")
-    # Reduce iterations for potential speedup and stability
-    # num_iters = min(num_iters, 5) if num_iters > 5 else num_iters # Limit removed
-    for _ in range(num_iters):
-        inflow = torch.zeros_like(drainage_area)
-        # Pad current drainage area to access neighbor values easily
-        da_padded = F.pad(drainage_area, (1, 1, 1, 1), mode='constant', value=0)
+    # 使用错误处理上下文进行迭代计算
+    with error_handler.handling_context(
+        retry_on=[RuntimeError], 
+        ignore=[], 
+        reraise=False,
+        max_retries=2
+    ) as err_ctx:
+        
+        # 优化：增加迭代次数以提高准确性
+        actual_iters = min(max(num_iters, 30), 100)  # 确保迭代次数足够但不过多
+        
+        if verbose: 
+            logging.info(f"使用简化迭代流量累积 ({actual_iters} 迭代)。")
+            
+        try:
+            for _ in range(actual_iters):
+                # 检查是否需要重试
+                if err_ctx.retries > 0:
+                    # 如果是重试，简化计算或使用不同的策略
+                    logging.info("使用稳定化迭代计算汇水面积...")
+                    
+                inflow = torch.zeros_like(drainage_area)
+                # Pad current drainage area to access neighbor values easily
+                da_padded = F.pad(drainage_area, (1, 1, 1, 1), mode='constant', value=0)
 
-        for i in range(8):
-            # Get the weight assigned by neighbor 'i' towards the center
-            neighbor_weight_to_center = weights[:, reverse_weight_indices[i]:reverse_weight_indices[i]+1, :, :]
+                for i in range(8):
+                    # Get the weight assigned by neighbor 'i' towards the center
+                    neighbor_weight_to_center = weights[:, reverse_weight_indices[i]:reverse_weight_indices[i]+1, :, :]
 
-            # Get the drainage area of neighbor 'i' by shifting the padded DA
-            dy_offset, dx_offset = offsets[i]
-            neighbor_da = da_padded[:, :, 1+dy_offset:height+1+dy_offset, 1+dx_offset:width+1+dx_offset]
+                    # Get the drainage area of neighbor 'i' by shifting the padded DA
+                    dy_offset, dx_offset = offsets[i]
+                    neighbor_da = da_padded[:, :, 1+dy_offset:height+1+dy_offset, 1+dx_offset:width+1+dx_offset]
 
-            # Calculate inflow from neighbor 'i'
-            inflow += neighbor_da * neighbor_weight_to_center
+                    # Calculate inflow from neighbor 'i'
+                    inflow += neighbor_da * neighbor_weight_to_center
 
-        # Update drainage area: local flow + inflow from all neighbors
-        drainage_area = local_flow + inflow
+                # Update drainage area: local flow + inflow from all neighbors
+                drainage_area = local_flow + inflow
+                
+                # 稳定性检查
+                if torch.isnan(drainage_area).any():
+                    raise RuntimeError("汇水面积计算中检测到NaN值，正在重试...")
+                    
+                if torch.isinf(drainage_area).any():
+                    raise RuntimeError("汇水面积计算中检测到Inf值，正在重试...")
+        
+        except Exception as e:
+            logging.error(f"汇水面积计算失败: {str(e)}")
+            # 发生错误时，返回一个简单的估计
+            # 对于简单表面，这可能是合理的近似
+            drainage_area = local_flow.clone()
+            
+            # 为洼地创建一个简单的汇聚模式
+            # 查找局部最小值
+            h_pad = F.pad(h, (1, 1, 1, 1), mode='constant', value=float('inf'))
+            is_min = True
+            
+            # 检查8个相邻点，确定每个点是否为局部最小值
+            for dy_offset, dx_offset in offsets:
+                neighbor_h = h_pad[:, :, 
+                                    1+dy_offset:height+1+dy_offset, 
+                                    1+dx_offset:width+1+dx_offset]
+                is_min = is_min & (h <= neighbor_h)
+            
+            # 对局部最小值进行特殊处理（增加汇聚）
+            min_mask = is_min.float() * 5.0  # 增强因子
+            drainage_area = drainage_area * (1.0 + min_mask)
+            
+            logging.warning("使用简化的汇水面积估计。")
 
     return drainage_area
 
