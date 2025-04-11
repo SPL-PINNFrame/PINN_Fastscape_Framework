@@ -117,7 +117,17 @@ class PINNTrainer:
         self.loss_scaler = LossScaler(enabled=self.train_config.get('enable_loss_scaling', False))
 
         # PDE loss related settings
-        self.pde_loss_method = self.train_config.get('pde_loss_method', 'dual_output' if self.is_dual_output_capable else 'grid_focused')
+        # FIXED: Properly use training config for pde_loss_method, with appropriate fallbacks
+        train_settings = self.train_config.get('training', self.train_config)
+        # First look in training subsection, then fallback to top level, then use model-appropriate default
+        self.pde_loss_method = train_settings.get(
+            'pde_loss_method', 
+            self.train_config.get(
+                'pde_loss_method', 
+                'dual_output' if self.is_dual_output_capable else 'grid_focused'
+            )
+        )
+        
         self.n_collocation = self.train_config.get('n_collocation', 1000)
         
         # 根据选择的损失计算方法设置模型输出模式
@@ -155,6 +165,15 @@ class PINNTrainer:
         if self.use_amp:
              logging.info("Mixed precision training enabled.")
 
+        # Setup checkpoint directory
+        self.run_name = self.train_config.get('run_name', 'pinn_run')
+        self.checkpoint_dir = os.path.join(self.results_dir, self.run_name, 'checkpoints')
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+        # Setup TensorBoard
+        tensorboard_dir = os.path.join(self.results_dir, self.run_name, 'tensorboard')
+        os.makedirs(tensorboard_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=tensorboard_dir)
 
         self.start_epoch = 0
         self.best_val_loss = float('inf')
@@ -291,6 +310,7 @@ class PINNTrainer:
                         if use_physics_loss:
                             try:
                                 # --- Select PDE Loss Calculation Method ---
+                                # FIXED: Properly select and use the configured PDE loss method
                                 if self.pde_loss_method == 'grid_focused':
                                     # Requires model prediction 'data_pred' (grid) and 't_grid'
                                     t_grid = data_inputs.get('run_time') # Assuming run_time corresponds to the grid time
