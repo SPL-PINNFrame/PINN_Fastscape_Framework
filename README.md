@@ -90,7 +90,9 @@ PINN_Fastscape_Framework/
 ### 3.1 地貌演化的控制方程
 
 框架模拟河流侵蚀和坡面扩散，由以下 PDE 描述：
-$$\frac{\partial z}{\partial t} = U - K_{sp} A^m S^n + K_d \nabla^2 h$$
+
+$$\frac{\partial z}{\partial t} = U - K_{sp} A^m S^n + K_d \nabla^2 h$$  
+
 其中：
 
 - z: 地形高度
@@ -345,8 +347,6 @@ class TimeDerivativePINN(nn.Module):
 *   对生成的数据、训练后的模型以及预测结果的质量验证有限。
 *   缺少对 `scripts/optimize.py` 脚本的测试。
 *   部分测试依赖于特定的配置文件，可能无法覆盖所有配置场景。
-
----
 
 ## 11. 当前测试状态总结 (2025-04-06)
 
