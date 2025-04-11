@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import math # For sqrt(2)
 import logging
-from .utils import ErrorHandler
+from .utils import ErrorHandler, ensure_tensor, validate_and_transform_shape
 
 # -----------------------------------------------------------------------------
 # Terrain Derivatives (Differentiable using PyTorch Conv2d)
@@ -38,10 +38,15 @@ def calculate_slope_magnitude(h, dx, dy, padding_mode='replicate'):
         torch.Tensor: Slope magnitude tensor (batch, 1, height, width).
                       Note: This is the magnitude |∇h|, not atan(|∇h|).
     """
+    # 确保输入是tensor，并具有一致的数据类型
+    h = ensure_tensor(h)
+    device = h.device
+    dtype = h.dtype
+    
     kernel_x, kernel_y = get_sobel_kernels(dx, dy)
     # Ensure kernel dtype matches input tensor h's dtype
-    kernel_x = kernel_x.to(device=h.device, dtype=h.dtype)
-    kernel_y = kernel_y.to(device=h.device, dtype=h.dtype)
+    kernel_x = kernel_x.to(device=device, dtype=dtype)
+    kernel_y = kernel_y.to(device=device, dtype=dtype)
 
     # Calculate gradients using convolution
     # padding='same' requires PyTorch 1.9+ and ensures output size matches input size
@@ -89,16 +94,21 @@ def calculate_laplacian(h, dx, dy, padding_mode='replicate'):
     Returns:
         torch.Tensor: Laplacian tensor (batch, 1, height, width).
     """
+    # 确保输入是tensor并具有一致的数据类型
+    h = ensure_tensor(h)
+    device = h.device
+    dtype = h.dtype
+    
     # TODO: Handle dx != dy case properly if needed.
     if abs(dx - dy) > 1e-6:
         print("Warning: calculate_laplacian currently assumes dx == dy for simplicity.")
         # Implement the more general formula if dx != dy
         # lap = (h(i+1,j)-2h(i,j)+h(i-1,j))/dx^2 + (h(i,j+1)-2h(i,j)+h(i,j-1))/dy^2
         # This can be done with two separate convolutions for d^2/dx^2 and d^2/dy^2
-        kernel_dxx = torch.tensor([[0, 0, 0], [1, -2, 1], [0, 0, 0]], dtype=torch.float32).view(1, 1, 3, 3) / (dx**2)
-        kernel_dyy = torch.tensor([[0, 1, 0], [0, -2, 0], [0, 1, 0]], dtype=torch.float32).view(1, 1, 3, 3) / (dy**2)
-        kernel_dxx = kernel_dxx.to(h.device)
-        kernel_dyy = kernel_dyy.to(h.device)
+        kernel_dxx = torch.tensor([[0, 0, 0], [1, -2, 1], [0, 0, 0]], dtype=h.dtype).view(1, 1, 3, 3) / (dx**2)
+        kernel_dyy = torch.tensor([[0, 1, 0], [0, -2, 0], [0, 1, 0]], dtype=h.dtype).view(1, 1, 3, 3) / (dy**2)
+        kernel_dxx = kernel_dxx.to(device)
+        kernel_dyy = kernel_dyy.to(device)
         pad_size = 1
         h_padded = F.pad(h, (pad_size, pad_size, pad_size, pad_size), mode=padding_mode)
         lap_x = F.conv2d(h_padded, kernel_dxx, padding=0)
@@ -107,7 +117,7 @@ def calculate_laplacian(h, dx, dy, padding_mode='replicate'):
     else:
         # Use the simpler 5-point kernel assuming dx == dy
         kernel = get_laplacian_kernel(dx, dy)
-        kernel = kernel.to(h.device)
+        kernel = kernel.to(device=device, dtype=dtype)
         pad_size = 1
         h_padded = F.pad(h, (pad_size, pad_size, pad_size, pad_size), mode=padding_mode)
         laplacian = F.conv2d(h_padded, kernel, padding=0)
@@ -118,19 +128,39 @@ def calculate_laplacian(h, dx, dy, padding_mode='replicate'):
 # Flow Routing and Drainage Area (Differentiable Approximation - CHALLENGE)
 # -----------------------------------------------------------------------------
 
-def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp=0.01, num_iters=10, verbose=False): # Add verbose flag
-    """优化的可微分汇水面积计算，使用PyTorch的内置操作减少循环"""
+def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp=0.01, num_iters=10, verbose=False, 
+                                                     dynamic_temp=True, depression_handling='weighted_aggregation'): 
+    """优化的可微分汇水面积计算，使用PyTorch的内置操作减少循环
+    
+    Args:
+        h (torch.Tensor): 地形高度 (batch, 1, height, width)
+        dx (float): x方向网格间距
+        dy (float): y方向网格间距
+        precip (float or torch.Tensor): 降水输入（标量或与h形状匹配的张量）
+        temp (float): softmax温度参数，影响流向分配的"锐度"
+        num_iters (int): 流量累积迭代次数
+        verbose (bool): 是否打印详细信息
+        dynamic_temp (bool): 是否根据坡度分布动态调整温度
+        depression_handling (str): 洼地处理策略 ('weighted_aggregation', 'simple')
+        
+    Returns:
+        torch.Tensor: 汇水面积张量 (batch, 1, height, width)
+    """
     # 创建错误处理器
     error_handler = ErrorHandler(max_retries=1)
     
+    # 确保输入是tensor，并验证形状
+    h = ensure_tensor(h)
     batch_size, _, height, width = h.shape
     device = h.device
+    dtype = h.dtype
     cell_area = dx * dy
 
     # Handle precipitation input (scalar or tensor)
     if isinstance(precip, (float, int)):
         local_flow = torch.full_like(h, precip * cell_area)
     elif isinstance(precip, torch.Tensor):
+        precip = ensure_tensor(precip, device=device, dtype=dtype)
         if precip.shape == h.shape:
              local_flow = precip * cell_area
         elif precip.numel() == 1: # Scalar tensor
@@ -150,7 +180,7 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
     h_pad = pad(h)
 
     # 创建8个方向的卷积核 (h_center - h_neighbor)
-    kernels = torch.zeros(8, 1, 3, 3, device=device)
+    kernels = torch.zeros(8, 1, 3, 3, device=device, dtype=dtype)
     # N, NE, E, SE, S, SW, W, NW
     # Note: Kernel indices (y, x) relative to top-left (0,0) of 3x3 kernel
     directions = [(0,1), (0,2), (1,2), (2,2), (2,1), (2,0), (1,0), (0,0)]
@@ -165,12 +195,31 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
     dist_diag = math.sqrt(dx**2 + dy**2)
     distances = torch.tensor([dy, dist_diag, dx, dist_diag,
                              dy, dist_diag, dx, dist_diag],
-                             device=device).view(1, 8, 1, 1)
+                             device=device, dtype=dtype).view(1, 8, 1, 1)
 
     # 计算坡度
     slopes = dh / (distances + 1e-10)
 
     # 2. 计算流向权重 (Softmax)
+    # 如果启用了动态温度，根据坡度分布调整
+    if dynamic_temp:
+        # 分析坡度统计，自适应调整温度
+        # 使用负坡度的百分位数来调整温度
+        valid_slopes = slopes[slopes < 0]
+        if valid_slopes.numel() > 0:
+            # 计算10%和90%分位数，获取坡度范围
+            q10 = torch.quantile(valid_slopes, 0.1)
+            q90 = torch.quantile(valid_slopes, 0.9)
+            slope_range = q90 - q10
+            # 调整温度：坡度范围小（平坦地形）时使用更高温度
+            # 坡度范围大（陡峭地形）时使用更低温度
+            adjusted_temp = temp * (0.1 / (slope_range.abs() + 0.01))
+            # 限制温度在合理范围内
+            adjusted_temp = torch.clamp(adjusted_temp, min=temp/10, max=temp*10)
+            if verbose:
+                logging.info(f"Dynamic temperature adjustment: original={temp}, adjusted={adjusted_temp.item()}")
+            temp = adjusted_temp.item()
+    
     # 带错误处理的softmax计算函数
     @error_handler.catch_and_handle(retry_on=[RuntimeError], ignore=[])
     def compute_flow_weights(slope_values, temperature):
@@ -196,7 +245,7 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
         if weights is None or torch.isnan(weights).any():
             logging.error(f"即使在更高的温度 {higher_temp} 下，计算流向权重仍然失败。使用均匀权重。")
             # 创建均匀权重作为后备
-            weights = torch.full((batch_size, 8, height, width), 1.0/8.0, device=device, dtype=h.dtype)
+            weights = torch.full((batch_size, 8, height, width), 1.0/8.0, device=device, dtype=dtype)
 
     # 处理仍可能存在的NaN
     if torch.isnan(weights).any():
@@ -208,9 +257,27 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
         weights_sum = weights.sum(dim=1, keepdim=True)
         weights = weights / (weights_sum + 1e-12)
 
-    # 3. 迭代计算汇水面积
+    # 3. 洼地处理：识别局部最小值（洼地）
+    h_pad = F.pad(h, (1, 1, 1, 1), mode='constant', value=float('inf'))
+    is_min = torch.ones_like(h, dtype=torch.bool)
+    
+    # 检查8个相邻点，确定每个点是否为局部最小值
+    offsets = [
+        (1, 0), (1, -1), (0, -1), (-1, -1),
+        (-1, 0), (-1, 1), (0, 1), (1, 1)
+    ]
+    for dy_offset, dx_offset in offsets:
+        neighbor_h = h_pad[:, :, 
+                        1+dy_offset:height+1+dy_offset, 
+                        1+dx_offset:width+1+dx_offset]
+        is_min = is_min & (h <= neighbor_h)
+    
+    # 创建洼地掩码
+    depression_mask = is_min.float()
+    
+    # 4. 迭代计算汇水面积，根据depression_handling策略处理洼地
     drainage_area = local_flow.clone()
-
+    
     # 预计算反向偏移和索引 (for optimized accumulation)
     # Offsets (dy, dx) from neighbor to center
     offsets = [
@@ -258,8 +325,32 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
                     # Calculate inflow from neighbor 'i'
                     inflow += neighbor_da * neighbor_weight_to_center
 
-                # Update drainage area: local flow + inflow from all neighbors
-                drainage_area = local_flow + inflow
+                # 洼地处理策略
+                if depression_handling == 'weighted_aggregation':
+                    # 加权汇聚：洼地从周围收集流量，但以较小的权重输出
+                    # 这样洼地内的水会累积但不会完全困住
+                    depression_factor = torch.where(
+                        depression_mask > 0, 
+                        torch.full_like(depression_mask, 0.5),  # 洼地的传递因子
+                        torch.ones_like(depression_mask)  # 非洼地的传递因子
+                    )
+                    
+                    # 洼地接收额外流量
+                    depression_bonus = torch.where(
+                        depression_mask > 0,
+                        inflow * 0.3,  # 额外收集的流量
+                        torch.zeros_like(inflow)
+                    )
+                    
+                    # 更新汇水面积：本地流量 + 调整后的流入 + 洼地额外流量
+                    drainage_area = local_flow + inflow * depression_factor + depression_bonus
+                
+                elif depression_handling == 'simple':
+                    # 简单处理：所有单元都正常处理
+                    drainage_area = local_flow + inflow
+                
+                else:
+                    raise ValueError(f"未知的洼地处理策略: {depression_handling}")
                 
                 # 稳定性检查
                 if torch.isnan(drainage_area).any():
@@ -277,13 +368,13 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
             # 为洼地创建一个简单的汇聚模式
             # 查找局部最小值
             h_pad = F.pad(h, (1, 1, 1, 1), mode='constant', value=float('inf'))
-            is_min = True
+            is_min = torch.ones_like(h, dtype=torch.bool)
             
             # 检查8个相邻点，确定每个点是否为局部最小值
             for dy_offset, dx_offset in offsets:
                 neighbor_h = h_pad[:, :, 
-                                    1+dy_offset:height+1+dy_offset, 
-                                    1+dx_offset:width+1+dx_offset]
+                                1+dy_offset:height+1+dy_offset, 
+                                1+dx_offset:width+1+dx_offset]
                 is_min = is_min & (h <= neighbor_h)
             
             # 对局部最小值进行特殊处理（增加汇聚）
@@ -315,6 +406,16 @@ def stream_power_erosion(h, drainage_area, slope_magnitude, K_f, m, n):
     Returns:
         torch.Tensor: Erosion rate tensor (positive values indicate erosion).
     """
+    # 确保输入是tensor，并具有一致的数据类型
+    h = ensure_tensor(h)
+    drainage_area = ensure_tensor(drainage_area, device=h.device, dtype=h.dtype)
+    slope_magnitude = ensure_tensor(slope_magnitude, device=h.device, dtype=h.dtype)
+    
+    if isinstance(K_f, (int, float)):
+        K_f = torch.tensor(K_f, device=h.device, dtype=h.dtype)
+    elif isinstance(K_f, torch.Tensor):
+        K_f = K_f.to(device=h.device, dtype=h.dtype)
+    
     # Add small epsilon to avoid issues with A=0 or S=0 if m or n are non-integer or negative.
     epsilon = 1e-10
     erosion_rate = K_f * (drainage_area + epsilon)**m * (slope_magnitude + epsilon)**n
@@ -337,6 +438,14 @@ def hillslope_diffusion(h, K_d, dx, dy, padding_mode='replicate'):
     Returns:
         torch.Tensor: Diffusion rate tensor.
     """
+    # 确保输入是tensor，并具有一致的数据类型
+    h = ensure_tensor(h)
+    
+    if isinstance(K_d, (int, float)):
+        K_d = torch.tensor(K_d, device=h.device, dtype=h.dtype)
+    elif isinstance(K_d, torch.Tensor):
+        K_d = K_d.to(device=h.device, dtype=h.dtype)
+    
     laplacian_h = calculate_laplacian(h, dx, dy, padding_mode=padding_mode)
     diffusion_rate = K_d * laplacian_h
     return diffusion_rate
@@ -368,8 +477,17 @@ def calculate_dhdt_physics(h, U, K_f, m, n, K_d, dx, dy, precip=1.0, padding_mod
     Returns:
         torch.Tensor: The calculated dh/dt based on physics.
     """
-    # Removed import from .derivatives
-
+    # 确保输入是tensor，并具有一致的数据类型
+    h = ensure_tensor(h)
+    device = h.device
+    dtype = h.dtype
+    
+    # 确保U是tensor并匹配h的形状
+    if isinstance(U, (int, float)):
+        U = torch.tensor(U, device=device, dtype=dtype)
+    elif isinstance(U, torch.Tensor):
+        U = U.to(device=device, dtype=dtype)
+    
     # Calculate slope magnitude using the function defined in this file
     slope_mag = calculate_slope_magnitude(h, dx, dy, padding_mode=padding_mode)
 

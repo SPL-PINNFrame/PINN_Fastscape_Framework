@@ -4,146 +4,151 @@ import logging
 from tqdm import tqdm
 import time
 import numpy as np
-import torch.nn.functional as F # Ensure F is imported if used elsewhere
-import logging
-import torch
-from torch import optim
-# ADDED: Import calculate_laplacian
+import torch.nn.functional as F
 from src.physics import calculate_laplacian
 from scipy.interpolate import griddata
-import torch.nn.functional as F
 import os # For save_path
-# from scipy.optimize import minimize as scipy_minimize # Comment out SciPy import
 
-# --- Interpolation Function ---
+# --- 统一的插值函数 ---
 
-def interpolate_uplift_cv(uplift_params_flat, param_shape, target_shape, method='linear'):
-    """
-    Interpolates low-resolution uplift parameters to the target grid shape.
-    Uses scipy.interpolate.griddata (suitable for SciPy optimizers).
-
+def interpolate_uplift(uplift_params, param_shape, target_shape, backend='torch', 
+                       method='rbf', sigma=0.1, **kwargs):
+    """统一的插值函数接口
+    
     Args:
-        uplift_params_flat (np.ndarray): Flattened array of uplift parameters.
-        param_shape (tuple): Shape of the low-resolution parameter grid (e.g., (10, 10)).
-        target_shape (tuple): Shape of the target high-resolution grid (e.g., (100, 100)).
-        method (str): Interpolation method ('linear', 'nearest', 'cubic').
-
+        uplift_params: 参数数组/张量
+        param_shape: 参数原始形状
+        target_shape: 目标形状
+        backend: 使用哪个后端 ('torch' 或 'numpy')
+        method: 插值方法 (torch: 'rbf', 'bilinear'; numpy: 'linear', 'nearest', 'cubic')
+        sigma: RBF带宽参数 (用于torch+rbf方法)
+        **kwargs: 其他参数
+        
     Returns:
-        np.ndarray: Interpolated uplift field with target_shape.
+        插值后的数组/张量
     """
-    param_grid = uplift_params_flat.reshape(param_shape)
-    param_h, param_w = param_shape
-    target_h, target_w = target_shape
+    if backend == 'torch':
+        # 使用PyTorch实现
+        # 确保输入是张量
+        from .utils import ensure_tensor
+        uplift_params = ensure_tensor(uplift_params)
+        device = uplift_params.device
+        dtype = uplift_params.dtype
+        
+        # 确保输入是扁平化的
+        if uplift_params.ndim != 1:
+            uplift_params_flat = uplift_params.flatten()
+        else:
+            uplift_params_flat = uplift_params
+            
+        param_h, param_w = param_shape
+        target_h, target_w = target_shape
+        
+        # 创建归一化的源网格坐标
+        x_src = torch.linspace(0, 1, param_w, device=device, dtype=dtype)
+        y_src = torch.linspace(0, 1, param_h, device=device, dtype=dtype)
+        grid_y_src, grid_x_src = torch.meshgrid(y_src, x_src, indexing='ij')
+        points_src = torch.stack([grid_x_src.flatten(), grid_y_src.flatten()], dim=1) # Shape (H_param*W_param, 2)
+        
+        # 创建归一化的目标网格坐标
+        x_tgt = torch.linspace(0, 1, target_w, device=device, dtype=dtype)
+        y_tgt = torch.linspace(0, 1, target_h, device=device, dtype=dtype)
+        grid_y_tgt, grid_x_tgt = torch.meshgrid(y_tgt, x_tgt, indexing='ij')
+        points_tgt = torch.stack([grid_x_tgt.flatten(), grid_y_tgt.flatten()], dim=1) # Shape (H_target*W_target, 2)
+        
+        # 实现不同的插值方法
+        if method == 'rbf':
+            # 使用RBF插值
+            # 计算点对点距离矩阵
+            diff = points_tgt.unsqueeze(1) - points_src.unsqueeze(0) # [Q, P, 2]
+            dist_sq = torch.sum(diff**2, dim=2)  # [Q, P]
+            
+            # 计算RBF权重
+            weights = torch.exp(-dist_sq / (2 * sigma**2))  # [Q, P]
+            weights = weights / (torch.sum(weights, dim=1, keepdim=True) + 1e-10)
+            
+            # 加权平均计算插值结果
+            # Ensure values_src is [P, 1] for matmul
+            values_tgt = torch.matmul(weights, uplift_params_flat.unsqueeze(1)).squeeze(1) # [Q, P] @ [P, 1] -> [Q, 1] -> [Q]
+            return values_tgt.reshape(target_shape)
+            
+        elif method == 'bilinear':
+            # 使用grid_sample实现双线性插值
+            from .utils import normalize_grid_sample
+            # 需要将目标坐标从[0,1]映射到[-1,1] for grid_sample
+            grid_sample_coords = torch.stack([grid_x_tgt, grid_y_tgt], dim=2).unsqueeze(0) # Shape (1, H_target, W_target, 2)
+            grid_sample_coords = normalize_grid_sample(grid_sample_coords)
+            
+            # 重塑参数网格并添加批次和通道维度
+            param_grid = uplift_params_flat.reshape(1, 1, param_h, param_w) # Shape (1, 1, H_param, W_param)
+            
+            # 使用grid_sample进行插值
+            # align_corners=True is often recommended for resolution changes
+            values_tgt_grid = F.grid_sample(
+                param_grid,
+                grid_sample_coords,
+                mode='bilinear',
+                padding_mode='border',
+                align_corners=True
+            )
+            return values_tgt_grid.squeeze() # Remove B, C dims -> Shape (H_target, W_target)
+        else:
+            raise ValueError(f"未知的PyTorch插值方法: {method}")
+        
+    elif backend == 'numpy':
+        # 使用SciPy实现
+        if isinstance(uplift_params, torch.Tensor):
+            uplift_params_np = uplift_params.detach().cpu().numpy()
+        else:
+            uplift_params_np = uplift_params
+            
+        if uplift_params_np.ndim != 1:
+            uplift_params_flat = uplift_params_np.flatten()
+        else:
+            uplift_params_flat = uplift_params_np
+            
+        param_grid = uplift_params_flat.reshape(param_shape)
+        param_h, param_w = param_shape
+        target_h, target_w = target_shape
 
-    # Create coordinates for the low-resolution parameter grid
-    param_x = np.linspace(0, 1, param_w)
-    param_y = np.linspace(0, 1, param_h)
-    param_points = np.array([[x, y] for y in param_y for x in param_x])
+        # Create coordinates for the low-resolution parameter grid
+        param_x = np.linspace(0, 1, param_w)
+        param_y = np.linspace(0, 1, param_h)
+        param_points = np.array([[x, y] for y in param_y for x in param_x])
 
-    # Create coordinates for the high-resolution target grid
-    target_x = np.linspace(0, 1, target_w)
-    target_y = np.linspace(0, 1, target_h)
-    target_grid_y, target_grid_x = np.meshgrid(target_y, target_x, indexing='ij')
-    target_points = np.stack([target_grid_x.ravel(), target_grid_y.ravel()], axis=-1)
+        # Create coordinates for the high-resolution target grid
+        target_x = np.linspace(0, 1, target_w)
+        target_y = np.linspace(0, 1, target_h)
+        target_grid_y, target_grid_x = np.meshgrid(target_y, target_x, indexing='ij')
+        target_points = np.stack([target_grid_x.ravel(), target_grid_y.ravel()], axis=-1)
 
-    # Interpolate
-    try:
-        interpolated_uplift_flat = griddata(param_points, uplift_params_flat, target_points, method=method, fill_value=np.mean(uplift_params_flat))
-        # Handle potential NaNs if method='cubic'
-        interpolated_uplift_flat = np.nan_to_num(interpolated_uplift_flat, nan=np.mean(uplift_params_flat))
-    except Exception as e:
-        logging.error(f"Interpolation failed: {e}. Returning mean value grid.")
-        interpolated_uplift_flat = np.full(target_points.shape[0], np.mean(uplift_params_flat))
+        # Interpolate
+        try:
+            interpolated_uplift_flat = griddata(param_points, uplift_params_flat, target_points, 
+                                               method=method, fill_value=np.mean(uplift_params_flat))
+            # Handle potential NaNs if method='cubic'
+            interpolated_uplift_flat = np.nan_to_num(interpolated_uplift_flat, nan=np.mean(uplift_params_flat))
+        except Exception as e:
+            logging.error(f"Interpolation failed: {e}. Returning mean value grid.")
+            interpolated_uplift_flat = np.full(target_points.shape[0], np.mean(uplift_params_flat))
 
+        return interpolated_uplift_flat.reshape(target_shape)
+        
+    else:
+        raise ValueError(f"未知的后端: {backend}")
 
-    return interpolated_uplift_flat.reshape(target_shape)
-
-
+# 保留向后兼容的函数名
+def interpolate_uplift_cv(uplift_params_flat, param_shape, target_shape, method='linear'):
+    """保留向后兼容的SciPy版本插值"""
+    return interpolate_uplift(uplift_params_flat, param_shape, target_shape, 
+                              backend='numpy', method=method)
 
 def interpolate_uplift_torch(uplift_params, param_shape, target_shape, method='rbf', sigma=0.1):
-    """可微分的插值函数，用于PyTorch优化路径
-    
-    Args:
-        uplift_params (torch.Tensor): 需要插值的参数张量 (flattened or grid shape)
-        param_shape (tuple): 参数张量的原始形状 (H_param, W_param)
-        target_shape (tuple): 目标形状 (H_target, W_target)
-        method (str): 插值方法 ('rbf', 'bilinear')
-        sigma (float): RBF插值的带宽参数
-        
-    Returns:
-        torch.Tensor: 插值后的张量, shape=target_shape
-    """
-    device = uplift_params.device
-    
-    # Ensure input is flattened
-    if uplift_params.ndim != 1:
-        uplift_params_flat = uplift_params.flatten()
-    else:
-        uplift_params_flat = uplift_params
-        
-    param_h, param_w = param_shape
-    target_h, target_w = target_shape
-    
-    # 创建归一化的源网格坐标
-    x_src = torch.linspace(0, 1, param_w, device=device)
-    y_src = torch.linspace(0, 1, param_h, device=device)
-    grid_y_src, grid_x_src = torch.meshgrid(y_src, x_src, indexing='ij')
-    points_src = torch.stack([grid_x_src.flatten(), grid_y_src.flatten()], dim=1) # Shape (H_param*W_param, 2)
-    
-    # 创建归一化的目标网格坐标
-    x_tgt = torch.linspace(0, 1, target_w, device=device)
-    y_tgt = torch.linspace(0, 1, target_h, device=device)
-    grid_y_tgt, grid_x_tgt = torch.meshgrid(y_tgt, x_tgt, indexing='ij')
-    points_tgt = torch.stack([grid_x_tgt.flatten(), grid_y_tgt.flatten()], dim=1) # Shape (H_target*W_target, 2)
-    
-    # 获取源值 (ensure it's flat)
-    values_src = uplift_params_flat # Shape (H_param*W_param,)
-    
-    if method == 'rbf':
-        # 使用RBF插值
-        # 计算点对点距离矩阵
-        diff = points_tgt.unsqueeze(1) - points_src.unsqueeze(0) # [Q, P, 2]
-        dist_sq = torch.sum(diff**2, dim=2)  # [Q, P]
-        
-        # 计算RBF权重
-        weights = torch.exp(-dist_sq / (2 * sigma**2))  # [Q, P]
-        weights = weights / (torch.sum(weights, dim=1, keepdim=True) + 1e-10)
-        
-        # 加权平均计算插值结果
-        # Ensure values_src is [P, 1] for matmul
-        values_tgt = torch.matmul(weights, values_src.unsqueeze(1)).squeeze(1) # [Q, P] @ [P, 1] -> [Q, 1] -> [Q]
-    elif method == 'bilinear':
-        # 使用grid_sample实现双线性插值
-        # 需要将目标坐标从[0,1]映射到[-1,1] for grid_sample
-        grid_x_norm_gs = 2.0 * grid_x_tgt - 1.0
-        grid_y_norm_gs = 2.0 * grid_y_tgt - 1.0
-        # grid_sample expects grid shape (N, H_out, W_out, 2)
-        grid_sample_coords = torch.stack([grid_x_norm_gs, grid_y_norm_gs], dim=2).unsqueeze(0) # Shape (1, H_target, W_target, 2)
-        
-        # 重塑参数网格并添加批次和通道维度
-        param_grid = uplift_params_flat.reshape(1, 1, param_h, param_w) # Shape (1, 1, H_param, W_param)
-        
-        # 使用grid_sample进行插值
-        # align_corners=True is often recommended for resolution changes
-        # Ensure inputs to grid_sample are float32
-        values_tgt_grid = torch.nn.functional.grid_sample(
-            param_grid.float(),  # Convert input grid to float
-            grid_sample_coords.float(), # Convert sampling coordinates to float
-            mode='bilinear',
-            padding_mode='border', # or 'zeros', 'reflection'
-            align_corners=True
-        )
-        values_tgt = values_tgt_grid.squeeze() # Remove B, C dims -> Shape (H_target, W_target)
-        # Flatten to match RBF output shape if needed, but returning grid is more useful
-        # values_tgt = values_tgt.flatten() 
-        return values_tgt # Return grid shape (H_target, W_target)
-    else:
-        raise ValueError(f"未知的插值方法: {method}")
-    
-    # Reshape RBF result to target grid shape
-    return values_tgt.reshape(target_shape)
+    """保留向后兼容的PyTorch版本插值"""
+    return interpolate_uplift(uplift_params, param_shape, target_shape, 
+                              backend='torch', method=method, sigma=sigma)
 
-# --- NEW: Parameter Optimizer Class (Grid Focused) ---
+# --- Parameter Optimizer Class ---
 
 class ParameterOptimizer:
     """参数优化器，专为地形网格优化设计"""
@@ -204,49 +209,15 @@ class ParameterOptimizer:
 
     def _ensure_initial_param_shape(self, initial_value, param_name):
         """确保初始参数张量具有正确的形状 [B, 1, H, W]。"""
-        target_shape = (self.batch_size, 1, self.height, self.width)
-        if initial_value is None:
-            # Default: Initialize with ones (can be scaled later if needed)
-            logging.info(f"No initial value provided for '{param_name}'. Initializing with ones.")
-            param_tensor = torch.ones(target_shape, device=self.device, dtype=self.dtype, requires_grad=True)
-        elif isinstance(initial_value, (int, float)):
-            # Scalar initial value
-            param_tensor = torch.full(target_shape, float(initial_value), device=self.device, dtype=self.dtype, requires_grad=True)
-        elif isinstance(initial_value, torch.Tensor):
-            param_tensor = initial_value.clone().to(device=self.device, dtype=self.dtype)
-            # Adjust shape if necessary
-            if param_tensor.shape != target_shape:
-                if param_tensor.numel() == 1: # Scalar tensor
-                    param_tensor = param_tensor.expand(target_shape).clone().detach().requires_grad_(True)
-                elif param_tensor.ndim == 2 and param_tensor.shape == (self.height, self.width): # H, W
-                    param_tensor = param_tensor.unsqueeze(0).unsqueeze(0).expand(target_shape).clone().detach().requires_grad_(True)
-                elif param_tensor.ndim == 3 and param_tensor.shape == (self.batch_size, self.height, self.width): # B, H, W
-                    param_tensor = param_tensor.unsqueeze(1).clone().detach().requires_grad_(True)
-                else:
-                    # Attempt interpolation if shapes don't match exactly but dims are compatible
-                    logging.warning(f"Initial value shape {param_tensor.shape} for '{param_name}' doesn't match target {target_shape}. Attempting interpolation.")
-                    try:
-                        # Ensure 4D input for interpolate
-                        if param_tensor.ndim == 2: param_tensor = param_tensor.unsqueeze(0).unsqueeze(0)
-                        elif param_tensor.ndim == 3: param_tensor = param_tensor.unsqueeze(1)
-
-                        param_tensor = F.interpolate(param_tensor, size=(self.height, self.width), mode='bilinear', align_corners=False)
-                        # Ensure correct batch size
-                        if param_tensor.shape[0] != self.batch_size:
-                             param_tensor = param_tensor.expand(self.batch_size, -1, -1, -1)
-                        param_tensor = param_tensor.clone().detach().requires_grad_(True)
-                        logging.info(f"Successfully interpolated initial value for '{param_name}' to {param_tensor.shape}.")
-                    except Exception as e:
-                        logging.error(f"Failed to interpolate initial value for '{param_name}': {e}")
-                        raise ValueError(f"Initial value shape {initial_value.shape} for '{param_name}' cannot be adapted to target {target_shape}.")
-            else:
-                 # Ensure requires_grad is True even if shape matches
-                 if not param_tensor.requires_grad:
-                      param_tensor.requires_grad_(True)
-        else:
-            raise TypeError(f"Unsupported type for initial_value of '{param_name}': {type(initial_value)}")
-
-        return param_tensor
+        from .utils import prepare_parameter
+        return prepare_parameter(
+            initial_value, 
+            target_shape=(self.height, self.width), 
+            batch_size=self.batch_size, 
+            device=self.device, 
+            dtype=self.dtype, 
+            param_name=param_name
+        )
 
 
     def create_objective_function(self, params_to_optimize, spatial_smoothness=0.0, bounds=None):
@@ -332,7 +303,7 @@ class ParameterOptimizer:
         return objective_function
 
 
-# --- NEW: PyTorch-based Optimization Function ---
+# --- PyTorch-based Optimization Function ---
 
 def optimize_parameters(model, observation_data, params_to_optimize_config, config,
                        initial_state=None, fixed_params=None, t_target=1.0):
@@ -529,113 +500,7 @@ def terrain_similarity(pred_topo_np, target_topo_np, metric='mse'):
     else:
         raise ValueError(f"Unknown similarity metric: {metric}")
 
-# --- Objective Function Creation (Old - SciPy based) ---
-# Note: Commenting out the SciPy-based objective creation and optimization functions
-# as the new PyTorch-based approach (`ParameterOptimizer`, `optimize_parameters`) is preferred.
-# Keep interpolation and similarity functions for potential reuse or reference.
-
-# def create_objective_function_pinn(
-#     target_dem_np,
-#     pinn_model,
-#     model_inputs_template, # Dict containing fixed inputs like initial_topo, K, D etc.
-#     uplift_param_shape,
-#     target_dem_shape, # Should match target_dem_np.shape
-#     device,
-#     interpolation_fn=interpolate_uplift_cv, # Function to interpolate uplift
-#     similarity_fn=terrain_similarity, # Function to compare terrains
-#     opt_config=None # Pass optimization config for regularization etc.
-# ):
-#     """
-#     (Commented out - Replaced by PyTorch-based ParameterOptimizer)
-#     Creates the objective function specifically for uplift parameter optimization using PINN.
-#     ... (original docstring) ...
-#     """
-#     pinn_model.eval() # Ensure model is in evaluation mode
-#     target_dem_torch = torch.from_numpy(target_dem_np).float().unsqueeze(0).unsqueeze(0).to(device) # Add B, C dims
-#
-#     # Extract fixed parameters (K, D) from template
-#     fixed_params = {
-#         'K': model_inputs_template.get('k_sp'), # Assuming k_sp corresponds to K
-#         'D': model_inputs_template.get('k_d')  # Assuming k_d corresponds to D
-#     }
-#     if fixed_params['K'] is None or fixed_params['D'] is None:
-#          logging.warning("Missing fixed parameters K (k_sp) or D (k_d) in model_inputs_template.")
-#          pass # Allow proceeding if model handles None, otherwise raise error earlier
-#
-#     initial_topo = model_inputs_template.get('initial_topography')
-#     if initial_topo is None:
-#         raise ValueError("Missing 'initial_topography' in model_inputs_template.")
-#
-#     t_target = model_inputs_template.get('t_target') # Get target time directly from template
-#     if t_target is None:
-#          raise ValueError("Missing target time 't_target' or 'physics_params.total_time'.")
-#
-#     # --- Regularization ---
-#     reg_weight = 0.0
-#     if opt_config:
-#          reg_weight = opt_config.get('parameter_regularization_weight', 0.0)
-#
-#     def objective_function(uplift_params_flat_np):
-#         """The actual objective function called by the optimizer."""
-#         # 1. Interpolate
-#         uplift_grid_np = interpolation_fn(uplift_params_flat_np, uplift_param_shape, target_dem_shape)
-#         uplift_grid_torch = torch.from_numpy(uplift_grid_np).float().unsqueeze(0).unsqueeze(0).to(device) # Add B, C dims
-#         # 2. Prepare inputs
-#         current_params = {**fixed_params, 'U': uplift_grid_torch}
-#         model_input_tuple = (initial_topo, current_params, t_target)
-#         # 3. Run PINN prediction
-#         try:
-#             with torch.no_grad():
-#                 pred_topo_torch = pinn_model(x=model_input_tuple, mode='predict_state')
-#             pred_topo_np = pred_topo_torch.squeeze().cpu().numpy()
-#         except Exception as e:
-#              logging.error(f"Error during PINN model prediction in objective function: {e}")
-#              return 1e10 # Return a large value on error
-#         # 4. Calculate similarity loss
-#         similarity_loss = similarity_fn(pred_topo_np, target_dem_np)
-#         # 5. Add regularization loss (optional)
-#         regularization_loss = 0.0
-#         if reg_weight > 0:
-#              regularization_loss = reg_weight * np.mean(uplift_params_flat_np**2)
-#         total_loss = similarity_loss + regularization_loss
-#         return total_loss
-#
-#     return objective_function
-
-
-# --- SciPy Optimization Wrapper (Old - Commented Out) ---
-
-# def optimize_uplift_scipy(
-#     objective_func,
-#     initial_uplift_params_flat,
-#     bounds=None,
-#     method='L-BFGS-B',
-#     max_iter=100,
-#     **scipy_options # Pass other options like tol, disp, etc.
-# ):
-#     """
-#     (Commented out - Replaced by PyTorch-based optimize_parameters)
-#     Wrapper for running uplift optimization using SciPy optimizers.
-#     ... (original docstring) ...
-#     """
-#     logging.info(f"Starting SciPy optimization using method '{method}' for max {max_iter} iterations.")
-#     options = {'maxiter': max_iter, 'disp': scipy_options.get('disp', True)}
-#     options.update({k: v for k, v in scipy_options.items() if k not in ['disp']}) # Add other options
-#     start_time = time.time()
-#     result = scipy_minimize(
-#         fun=objective_func,
-#         x0=initial_uplift_params_flat,
-#         method=method,
-#         bounds=bounds,
-#         options=options
-#     )
-#     end_time = time.time()
-#     logging.info(f"SciPy optimization finished in {end_time - start_time:.2f} seconds.")
-#     logging.info(f"Success: {result.success}, Status: {result.message}, Final Loss: {result.fun:.6f}, Iterations: {result.nit}")
-#     return result
-
-
-# --- PyTorch Optimization Wrapper (Placeholder/Example) ---
+# --- PyTorch Optimization Wrapper ---
 
 def optimize_uplift_torch(
     pinn_model,
@@ -653,8 +518,10 @@ def optimize_uplift_torch(
     opt_config=None
 ):
     """
-    Placeholder for running uplift optimization using PyTorch optimizers.
-    Requires differentiable interpolation and similarity functions.
+    运行使用PyTorch优化器的uplift优化。
+    需要可微分的插值和相似度函数。
+    
+    用optimize_parameters函数替代此函数，以获得更完整的功能和更好的错误处理。
     """
     logging.warning("optimize_uplift_torch requires differentiable interpolation_fn and similarity_fn.")
     logging.info(f"Starting PyTorch optimization using {optimizer_name} for {max_iter} iterations.")
@@ -751,99 +618,99 @@ def optimize_uplift_torch(
     return initial_uplift_params.detach(), history
 
 
-# --- Main test block for New PyTorch Optimizer ---
+# --- 示例测试代码 ---
 if __name__ == '__main__':
-    # Example usage for the new PyTorch-based optimization
+    # 示例用法
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
     print("Testing PyTorch-based Parameter Optimizer...")
 
-    # --- Dummy Setup ---
+    # --- 测试设置 ---
     try:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logging.info(f"Using device: {device}")
 
-        # Dummy Model (Needs predict_state)
+        # 模拟模型
         class OptimizerTestDummyModel(torch.nn.Module):
             def __init__(self, H=16, W=16):
                 super().__init__()
                 self.H, self.W = H, W
-                # Dummy conv layer to simulate some processing
-                self.conv = torch.nn.Conv2d(1 + 1, 1, kernel_size=3, padding=1) # Input: initial_topo + U
+                # 模拟处理层
+                self.conv = torch.nn.Conv2d(1 + 1, 1, kernel_size=3, padding=1) # 输入: initial_topo + U
 
             def forward(self, x, mode):
                 if mode == 'predict_state':
                     initial_topo = x['initial_state'] # [B, 1, H, W]
                     params = x['params']
-                    t_target = x['t_target'] # Scalar or [B] or [B,1,1,1]
+                    t_target = x['t_target'] # 标量或 [B] 或 [B,1,1,1]
                     U_grid = params.get('U') # [B, 1, H, W]
 
                     if U_grid is None: U_grid = torch.zeros_like(initial_topo)
 
-                    # Ensure t_target can broadcast
+                    # 确保t_target可以广播
                     if isinstance(t_target, torch.Tensor) and t_target.ndim == 1:
                          t_target = t_target.view(-1, 1, 1, 1)
 
-                    # Simple mock prediction: initial + conv(initial, U) * t
+                    # 简单的模拟预测: initial + conv(initial, U) * t
                     combined_input = torch.cat([initial_topo, U_grid], dim=1) # [B, 2, H, W]
                     processed = self.conv(combined_input) # [B, 1, H, W]
-                    pred = initial_topo + processed * t_target * 0.1 # Scaled effect
+                    pred = initial_topo + processed * t_target * 0.1 # 缩放效果
                     return pred
                 elif mode == 'predict_coords':
-                     # Dummy implementation for predict_coords if needed by other parts
+                     # predict_coords的虚拟实现
                      coords = x
-                     return torch.zeros_like(coords['x']) # Return zeros
+                     return torch.zeros_like(coords['x']) # 返回零
                 return None
         dummy_model = OptimizerTestDummyModel(H=16, W=16).to(device)
 
-        # Dummy Target Data
+        # 虚拟目标数据
         H, W = 16, 16
-        true_uplift_np = np.random.rand(H, W) * 0.002 # Spatially variable true uplift
+        true_uplift_np = np.random.rand(H, W) * 0.002 # 空间变化的真实uplift
         true_uplift_torch = torch.from_numpy(true_uplift_np).float().unsqueeze(0).unsqueeze(0).to(device)
-        initial_topo_torch = torch.rand(1, 1, H, W, device=device) * 10 # Random initial topo
+        initial_topo_torch = torch.rand(1, 1, H, W, device=device) * 10 # 随机初始地形
         t_target_val = 1000.0
-        true_params = {'U': true_uplift_torch, 'K': 1e-5, 'D': 0.01} # Fixed K, D
+        true_params = {'U': true_uplift_torch, 'K': 1e-5, 'D': 0.01} # 固定 K, D
         with torch.no_grad():
              dummy_target = dummy_model(x={'initial_state': initial_topo_torch, 'params': true_params, 't_target': t_target_val}, mode='predict_state')
         logging.info(f"Generated dummy target data with shape: {dummy_target.shape}")
 
-        # Parameters to Optimize Config
+        # 参数优化配置
         params_to_opt_config = {
-            'U': { # Optimize the 'U' parameter
-                'initial_value': torch.zeros_like(true_uplift_torch) + 0.0005, # Initial guess (uniform)
-                'bounds': (0.0, 0.005) # Example bounds for uplift
+            'U': { # 优化'U'参数
+                'initial_value': torch.zeros_like(true_uplift_torch) + 0.0005, # 初始猜测（均匀）
+                'bounds': (0.0, 0.005) # uplift的范围示例
             }
-            # Add other parameters here if needed, e.g., 'K'
+            # 如果需要可以添加其他参数，例如'K'
             # 'K': {'initial_value': 5e-6, 'bounds': (1e-7, 1e-4)}
         }
 
-        # Main Config for Optimization
+        # 主优化配置
         dummy_main_config = {
             'optimization_params': {
                 'optimizer': 'AdamW',
-                'learning_rate': 5e-4, # Adjusted LR
-                'max_iterations': 200, # Fewer iterations for test
-                'spatial_smoothness_weight': 1e-1, # Add some smoothness penalty
+                'learning_rate': 5e-4, # 调整学习率
+                'max_iterations': 200, # 减少测试的迭代次数
+                'spatial_smoothness_weight': 1e-1, # 添加平滑度惩罚
                 'log_interval': 20,
-                'weight_decay': 1e-4, # For AdamW
-                'save_path': 'results/dummy_optimize_test/optimized_params.pth' # Example save path
+                'weight_decay': 1e-4, # 用于AdamW
+                'save_path': 'results/dummy_optimize_test/optimized_params.pth' # 保存路径示例
             }
-            # Add other sections like 'physics_params' if needed by objective/model
+            # 如果目标/模型需要，可以添加其他部分如'physics_params'
         }
 
-        # --- Run Optimization ---
-        print("\nRunning dummy optimization with PyTorch...")
+        # --- 运行优化 ---
+        print("\n使用PyTorch运行虚拟优化...")
         optimized_params, history = optimize_parameters(
             model=dummy_model,
             observation_data=dummy_target,
             params_to_optimize_config=params_to_opt_config,
             config=dummy_main_config,
             initial_state=initial_topo_torch,
-            fixed_params={'K': true_params['K'], 'D': true_params['D']}, # Pass fixed params
+            fixed_params={'K': true_params['K'], 'D': true_params['D']}, # 传递固定参数
             t_target=t_target_val
         )
-        print("Optimization finished.")
+        print("优化完成.")
 
-        # --- Analyze Results ---
+        # --- 分析结果 ---
         if optimized_params and 'U' in optimized_params:
             optimized_U = optimized_params['U']
             initial_U = params_to_opt_config['U']['initial_value']
@@ -851,7 +718,7 @@ if __name__ == '__main__':
             print(f"Optimized U mean: {optimized_U.mean().item():.6f} (True mean: {true_uplift_torch.mean().item():.6f})")
             print(f"Final Loss: {history['final_loss']:.6e}")
 
-            # Optional: Visualize or compare optimized vs true U
+            # 可选: 可视化或比较优化的vs真实U
             # import matplotlib.pyplot as plt
             # fig, axes = plt.subplots(1, 3, figsize=(15, 5))
             # im0 = axes[0].imshow(initial_U.squeeze().cpu().numpy())
@@ -866,220 +733,13 @@ if __name__ == '__main__':
             # plt.tight_layout()
             # plt.show()
         else:
-            print("Optimization did not return expected parameters.")
+            print("优化未返回预期参数。")
 
     except ImportError as e:
-         print(f"Skipping optimizer test due to missing dependency: {e}")
+         print(f"由于缺少依赖跳过优化器测试: {e}")
     except Exception as e:
-        print(f"Error during optimizer test: {e}")
+        print(f"优化器测试期间出错: {e}")
         import traceback
         traceback.print_exc()
 
-
-    print("\nOptimizer utilities testing done.")
-
-
-# def run_optimization(objective_fn, closure, initial_params_dict, config):
-#     """
-#     (Commented out - Replaced by the new optimize_parameters function)
-#     Runs the optimization loop.
-#     ... (original docstring) ...
-#     """
-#     opt_params = config.get('optimization_params', {})
-#     optimizer_name = opt_params.get('optimizer', 'LBFGS').lower()
-#     lr = opt_params.get('learning_rate', 0.1)
-#     max_iterations = opt_params.get('max_iterations', 100)
-#
-#     params_list = list(initial_params_dict.values())
-#     for p in params_list:
-#         if not p.requires_grad:
-#             logging.warning(f"Parameter {p} does not require grad. Setting requires_grad=True.")
-#             p.requires_grad_(True)
-#
-#     # Setup optimizer (LBFGS, Adam, AdamW)
-#     if optimizer_name == 'lbfgs':
-#         optimizer = optim.LBFGS(
-#             params_list, lr=lr, max_iter=opt_params.get('lbfgs_max_iter', 20),
-#             tolerance_grad=opt_params.get('tolerance_grad', 1e-7),
-#             tolerance_change=opt_params.get('tolerance_change', 1e-9),
-#             history_size=opt_params.get('history_size', 10), line_search_fn="strong_wolfe"
-#         )
-#         if closure is None: raise ValueError("LBFGS optimizer requires a closure function.")
-#     elif optimizer_name == 'adam':
-#         optimizer = optim.Adam(params_list, lr=lr, betas=opt_params.get('betas', [0.9, 0.999]), eps=opt_params.get('eps', 1e-8))
-#     elif optimizer_name == 'adamw':
-#         optimizer = optim.AdamW(params_list, lr=lr, betas=opt_params.get('betas', [0.9, 0.999]), eps=opt_params.get('eps', 1e-8), weight_decay=opt_params.get('weight_decay', 0))
-#     else: raise ValueError(f"Unsupported optimizer: {optimizer_name}")
-#
-#     logging.info(f"Starting optimization with {optimizer_name} for {max_iterations} iterations.")
-#     history = {'loss': [], 'iterations': 0, 'time': 0.0}
-#     start_time = time.time()
-#
-#     # Optimization loop
-#     for i in tqdm(range(max_iterations), desc="Optimizing"):
-#         try:
-#             if optimizer_name == 'lbfgs':
-#                 loss = optimizer.step(closure)
-#             else:
-#                 optimizer.zero_grad()
-#                 loss, loss_dict = objective_fn(initial_params_dict)
-#                 if torch.is_tensor(loss) and loss.requires_grad: loss.backward()
-#                 elif not torch.is_tensor(loss):
-#                      logging.error(f"Iteration {i}: Objective function did not return a tensor.")
-#                      break
-#                 optimizer.step()
-#
-#             current_loss = loss.item()
-#             history['loss'].append(current_loss)
-#
-#             if i % opt_params.get('log_interval', 10) == 0 or i == max_iterations - 1:
-#                 logging.info(f"Iteration {i}/{max_iterations}, Loss: {current_loss:.6e}")
-#
-#             # Convergence checks (Adam/AdamW)
-#             if optimizer_name != 'lbfgs':
-#                  if i > 0 and abs(history['loss'][-1] - history['loss'][-2]) < opt_params.get('loss_tolerance', 1e-9):
-#                      logging.info(f"Converged at iteration {i} due to small loss change.")
-#                      break
-#                  if not np.isfinite(current_loss):
-#                       logging.error(f"Loss is NaN or Inf at iteration {i}. Stopping optimization.")
-#                       break
-#         except Exception as e:
-#             logging.exception(f"Error during optimization iteration {i}:")
-#             break
-#
-#     end_time = time.time()
-#     total_time = end_time - start_time
-#     history['iterations'] = len(history['loss'])
-#     history['time'] = total_time
-#     history['final_loss'] = history['loss'][-1] if history['loss'] else float('nan')
-#     logging.info(f"Optimization took {total_time:.2f} seconds for {history['iterations']} iterations.")
-#     optimized_detached = {k: v.detach() for k, v in initial_params_dict.items()}
-#     return optimized_detached, history
-
-# (Keep the __main__ block from the previous version for testing the new functions)
-if __name__ == '__main__':
-    # Example usage for the new PyTorch-based optimization
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-    print("Testing PyTorch-based Parameter Optimizer...")
-
-    # --- Dummy Setup ---
-    try:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        logging.info(f"Using device: {device}")
-
-        # Dummy Model (Needs predict_state)
-        class OptimizerTestDummyModel(torch.nn.Module):
-            def __init__(self, H=16, W=16):
-                super().__init__()
-                self.H, self.W = H, W
-                # Dummy conv layer to simulate some processing
-                self.conv = torch.nn.Conv2d(1 + 1, 1, kernel_size=3, padding=1) # Input: initial_topo + U
-
-            def forward(self, x, mode):
-                if mode == 'predict_state':
-                    initial_topo = x['initial_state'] # [B, 1, H, W]
-                    params = x['params']
-                    t_target = x['t_target'] # Scalar or [B] or [B,1,1,1]
-                    U_grid = params.get('U') # [B, 1, H, W]
-
-                    if U_grid is None: U_grid = torch.zeros_like(initial_topo)
-
-                    # Ensure t_target can broadcast
-                    if isinstance(t_target, torch.Tensor) and t_target.ndim == 1:
-                         t_target = t_target.view(-1, 1, 1, 1)
-
-                    # Simple mock prediction: initial + conv(initial, U) * t
-                    combined_input = torch.cat([initial_topo, U_grid], dim=1) # [B, 2, H, W]
-                    processed = self.conv(combined_input) # [B, 1, H, W]
-                    pred = initial_topo + processed * t_target * 0.1 # Scaled effect
-                    return pred
-                elif mode == 'predict_coords':
-                     # Dummy implementation for predict_coords if needed by other parts
-                     coords = x
-                     return torch.zeros_like(coords['x']) # Return zeros
-                return None
-        dummy_model = OptimizerTestDummyModel(H=16, W=16).to(device)
-
-        # Dummy Target Data
-        H, W = 16, 16
-        true_uplift_np = np.random.rand(H, W) * 0.002 # Spatially variable true uplift
-        true_uplift_torch = torch.from_numpy(true_uplift_np).float().unsqueeze(0).unsqueeze(0).to(device)
-        initial_topo_torch = torch.rand(1, 1, H, W, device=device) * 10 # Random initial topo
-        t_target_val = 1000.0
-        true_params = {'U': true_uplift_torch, 'K': 1e-5, 'D': 0.01} # Fixed K, D
-        with torch.no_grad():
-             dummy_target = dummy_model(x={'initial_state': initial_topo_torch, 'params': true_params, 't_target': t_target_val}, mode='predict_state')
-        logging.info(f"Generated dummy target data with shape: {dummy_target.shape}")
-
-        # Parameters to Optimize Config
-        params_to_opt_config = {
-            'U': { # Optimize the 'U' parameter
-                'initial_value': torch.zeros_like(true_uplift_torch) + 0.0005, # Initial guess (uniform)
-                'bounds': (0.0, 0.005) # Example bounds for uplift
-            }
-            # Add other parameters here if needed, e.g., 'K'
-            # 'K': {'initial_value': 5e-6, 'bounds': (1e-7, 1e-4)}
-        }
-
-        # Main Config for Optimization
-        dummy_main_config = {
-            'optimization_params': {
-                'optimizer': 'AdamW',
-                'learning_rate': 5e-4, # Adjusted LR
-                'max_iterations': 200, # Fewer iterations for test
-                'spatial_smoothness_weight': 1e-1, # Add some smoothness penalty
-                'log_interval': 20,
-                'weight_decay': 1e-4, # For AdamW
-                'save_path': 'results/dummy_optimize_test/optimized_params.pth' # Example save path
-            }
-            # Add other sections like 'physics_params' if needed by objective/model
-        }
-
-        # --- Run Optimization ---
-        print("\nRunning dummy optimization with PyTorch...")
-        optimized_params, history = optimize_parameters(
-            model=dummy_model,
-            observation_data=dummy_target,
-            params_to_optimize_config=params_to_opt_config,
-            config=dummy_main_config,
-            initial_state=initial_topo_torch,
-            fixed_params={'K': true_params['K'], 'D': true_params['D']}, # Pass fixed params
-            t_target=t_target_val
-        )
-        print("Optimization finished.")
-
-        # --- Analyze Results ---
-        if optimized_params and 'U' in optimized_params:
-            optimized_U = optimized_params['U']
-            initial_U = params_to_opt_config['U']['initial_value']
-            print(f"Initial U mean: {initial_U.mean().item():.6f}")
-            print(f"Optimized U mean: {optimized_U.mean().item():.6f} (True mean: {true_uplift_torch.mean().item():.6f})")
-            print(f"Final Loss: {history['final_loss']:.6e}")
-
-            # Optional: Visualize or compare optimized vs true U
-            # import matplotlib.pyplot as plt
-            # fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-            # im0 = axes[0].imshow(initial_U.squeeze().cpu().numpy())
-            # axes[0].set_title("Initial U")
-            # plt.colorbar(im0, ax=axes[0])
-            # im1 = axes[1].imshow(optimized_U.squeeze().cpu().numpy())
-            # axes[1].set_title("Optimized U")
-            # plt.colorbar(im1, ax=axes[1])
-            # im2 = axes[2].imshow(true_uplift_torch.squeeze().cpu().numpy())
-            # axes[2].set_title("True U")
-            # plt.colorbar(im2, ax=axes[2])
-            # plt.tight_layout()
-            # plt.show()
-        else:
-            print("Optimization did not return expected parameters.")
-
-    except ImportError as e:
-         print(f"Skipping optimizer test due to missing dependency: {e}")
-    except Exception as e:
-        print(f"Error during optimizer test: {e}")
-        import traceback
-        traceback.print_exc()
-
-
-    print("\nOptimizer utilities testing done.")
-    print("\nOptimizer utilities testing done.")
+    print("\n优化器工具测试完成。")

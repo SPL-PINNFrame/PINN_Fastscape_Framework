@@ -3,6 +3,7 @@ import torch.nn as nn
 import logging
 import torch.nn.functional as F
 import math # For sqrt(2) in AdaptiveFastscapePINN tiling (if needed)
+from .utils import ensure_tensor, validate_and_transform_shape, prepare_grid_sample_coords
 
 # --- Base Class for Dual Output --- 
 class TimeDerivativePINN(nn.Module):
@@ -103,6 +104,16 @@ class MLP_PINN(nn.Module):
             logging.warning(f"MLP_PINN input_dim={self.input_dim} > 3. Assuming extra inputs are 'param1', 'param2', ...")
 
         tensors_to_cat = []
+        device = None
+        dtype = None
+        
+        # 获取第一个有效张量的设备和数据类型
+        for key in coords:
+            if isinstance(coords[key], torch.Tensor):
+                device = coords[key].device
+                dtype = coords[key].dtype
+                break
+                
         for key in expected_keys:
             if key not in coords:
                 # 如果是可选参数（k, u, paramX）且未提供，则使用零填充
@@ -112,11 +123,12 @@ class MLP_PINN(nn.Module):
                      if ref_shape is None:
                           raise ValueError(f"无法确定形状以创建零填充参数 '{key}'")
                      logging.debug(f"Parameter '{key}' not found in coords, using zeros.")
-                     tensors_to_cat.append(torch.zeros(ref_shape, device=coords[next(iter(coords))].device, dtype=coords[next(iter(coords))].dtype))
+                     tensors_to_cat.append(torch.zeros(ref_shape, device=device, dtype=dtype))
                 else:
                      raise ValueError(f"缺少必需的坐标键 '{key}' (input_dim={self.input_dim})")
             else:
-                tensors_to_cat.append(coords[key])
+                # 确保是tensor并且有正确的设备和数据类型
+                tensors_to_cat.append(ensure_tensor(coords[key], device=device, dtype=dtype))
 
         if not tensors_to_cat:
              raise ValueError("未找到用于 MLP 输入的张量。")
@@ -163,6 +175,8 @@ class MLP_PINN(nn.Module):
             if initial_state is None or t_target is None:
                  raise ValueError("对于 'predict_state' 模式，缺少 'initial_state' 或 't_target' 输入。")
 
+            # 确保初始状态是tensor并且有正确的形状
+            initial_state = ensure_tensor(initial_state)
             batch_size, _, height, width = initial_state.shape
             device = initial_state.device
             dtype = initial_state.dtype # Use dtype from input state
@@ -177,19 +191,15 @@ class MLP_PINN(nn.Module):
             y_flat = grid_y.reshape(1, -1, 1).expand(batch_size, -1, -1)
 
             # 准备时间张量: [B, H*W, 1]
-            if isinstance(t_target, (int, float)):
-                t_flat = torch.full((batch_size, height * width, 1), float(t_target), device=device, dtype=dtype)
-            elif isinstance(t_target, torch.Tensor):
-                 if t_target.numel() == 1:
-                      t_flat = t_target.expand(batch_size, height * width, 1)
-                 elif t_target.ndim == 1 and t_target.shape[0] == batch_size: # [B]
-                      t_flat = t_target.view(batch_size, 1, 1).expand(-1, height * width, -1)
-                 elif t_target.shape == (batch_size, 1): # [B, 1]
-                      t_flat = t_target.unsqueeze(1).expand(-1, height * width, -1)
-                 else:
-                      raise ValueError(f"不支持的目标时间形状: {t_target.shape}")
+            t_flat = ensure_tensor(t_target, device=device, dtype=dtype)
+            if t_flat.numel() == 1:
+                t_flat = t_flat.expand(batch_size, height * width, 1)
+            elif t_flat.ndim == 1 and t_flat.shape[0] == batch_size:  # [B]
+                t_flat = t_flat.view(batch_size, 1, 1).expand(-1, height * width, -1)
+            elif t_flat.shape == (batch_size, 1):  # [B, 1]
+                t_flat = t_flat.unsqueeze(1).expand(-1, height * width, -1)
             else:
-                 raise TypeError(f"不支持的目标时间类型: {type(t_target)}")
+                raise ValueError(f"不支持的目标时间形状: {t_flat.shape}")
 
             # 准备坐标字典
             coords = {'x': x_flat, 'y': y_flat, 't': t_flat}
@@ -205,38 +215,38 @@ class MLP_PINN(nn.Module):
                     param_name = param_keys_map.get(key, key) # Get K, U etc.
                     param_value = params.get(param_name)
 
-                    if param_value is None:
-                         coords[key] = torch.zeros_like(x_flat)
-                         logging.debug(f"Parameter '{param_name}' (for key '{key}') not found in params dict, using zeros.")
-                         continue
-
-                    # 处理标量或空间变化的参数
-                    if isinstance(param_value, (int, float)):
-                         param_tensor = torch.full_like(x_flat, float(param_value))
-                    elif isinstance(param_value, torch.Tensor):
-                         param_value = param_value.to(device=device, dtype=dtype)
-                         if param_value.ndim == 0: # Scalar tensor
-                              param_tensor = param_value.expand_as(x_flat)
-                         elif param_value.ndim == 1 and param_value.shape[0] == batch_size: # Batch scalar [B]
-                              param_tensor = param_value.view(batch_size, 1, 1).expand_as(x_flat)
-                         elif param_value.ndim >= 2: # Spatial field [B,1,H,W] or [H,W] etc.
-                              # Sample from grid if spatial
-                              if param_value.ndim == 2: param_value = param_value.unsqueeze(0).unsqueeze(0) # H,W -> 1,1,H,W
-                              if param_value.ndim == 3: param_value = param_value.unsqueeze(1) # B,H,W -> B,1,H,W
-                              # Use grid_sample for spatial fields
-                              grid_for_sample = torch.stack([x_flat.squeeze(-1), y_flat.squeeze(-1)], dim=-1) # [B, H*W, 2]
-                              # Convert coords [0,1] to [-1,1] for grid_sample
-                              grid_for_sample = 2.0 * grid_for_sample - 1.0
-                              # Add dummy dimension for grid_sample: [B, H*W, 1, 2]
-                              grid_for_sample = grid_for_sample.unsqueeze(2)
-                              sampled_param = F.grid_sample(param_value, grid_for_sample, mode='bilinear', padding_mode='border', align_corners=False)
-                              # sampled_param shape: [B, C, N, 1] -> need [B, N, C]
-                              param_tensor = sampled_param.squeeze(-1).permute(0, 2, 1) # [B, H*W, C] (assume C=1)
-                         else:
-                              raise ValueError(f"无法处理参数 '{param_name}' 的形状: {param_value.shape}")
-                    else:
-                         raise TypeError(f"不支持的参数类型 '{param_name}': {type(param_value)}")
-
+                    param_tensor = torch.zeros_like(x_flat)
+                    
+                    if param_value is not None:
+                        # 确保参数值是tensor
+                        param_value = ensure_tensor(param_value, device=device, dtype=dtype)
+                        
+                        # 处理标量或空间变化的参数
+                        if param_value.numel() == 1:  # Scalar tensor
+                            param_tensor = param_value.expand_as(x_flat)
+                        elif param_value.ndim == 1 and param_value.shape[0] == batch_size:  # Batch scalar [B]
+                            param_tensor = param_value.view(batch_size, 1, 1).expand_as(x_flat)
+                        elif param_value.ndim >= 2:  # Spatial field [B,1,H,W] or [H,W] etc.
+                            # Sample from grid if spatial
+                            param_value = validate_and_transform_shape(
+                                param_value, 
+                                (batch_size, 1, height, width)
+                            )
+                            
+                            # Use grid_sample for spatial fields
+                            grid_for_sample = torch.stack([x_flat.squeeze(-1), y_flat.squeeze(-1)], dim=-1)  # [B, H*W, 2]
+                            # Convert coords [0,1] to [-1,1] for grid_sample
+                            grid_for_sample = prepare_grid_sample_coords(grid_for_sample)
+                            
+                            sampled_param = F.grid_sample(
+                                param_value, grid_for_sample, 
+                                mode='bilinear', 
+                                padding_mode='border', 
+                                align_corners=True
+                            )
+                            # sampled_param shape: [B, C, N, 1] -> need [B, N, C]
+                            param_tensor = sampled_param.squeeze(-1).permute(0, 2, 1)  # [B, H*W, C] (assume C=1)
+                    
                     coords[key] = param_tensor
 
             # 使用准备好的坐标调用 predict_coords 模式
@@ -286,47 +296,34 @@ class FastscapePINN(nn.Module):
 
     def _ensure_param_grid_shape(self, p, key, batch_size, device):
         """辅助函数，确保参数具有正确的网格形状 [B, 1, H, W]。"""
-        if p is None:
-            logging.warning(f"参数 '{key}' 未在 params 字典中找到，使用 0。")
-            return torch.zeros((batch_size, 1, self.grid_height, self.grid_width), device=device, dtype=torch.float32)
-
-        if isinstance(p, (int, float)):
-            return torch.full((batch_size, 1, self.grid_height, self.grid_width), float(p), device=device, dtype=torch.float32)
-        elif isinstance(p, torch.Tensor):
-            p = p.float().to(device)
-            if p.ndim == 0: # Scalar tensor
-                 return p.view(1, 1, 1, 1).expand(batch_size, 1, self.grid_height, self.grid_width)
-            elif p.ndim == 1 and p.shape[0] == batch_size: # Batch of scalars [B]
-                return p.view(batch_size, 1, 1, 1).expand(-1, 1, self.grid_height, self.grid_width)
-            elif p.ndim == 2 and p.shape == (self.grid_height, self.grid_width): # Spatial field [H, W]
-                return p.unsqueeze(0).unsqueeze(0).expand(batch_size, 1, -1, -1)
-            elif p.ndim == 3 and p.shape[0] == batch_size and p.shape[1:] == (self.grid_height, self.grid_width): # Spatial field [B, H, W]
-                return p.unsqueeze(1)
-            elif p.ndim == 4 and p.shape == (batch_size, 1, self.grid_height, self.grid_width): # Standard format [B, 1, H, W]
-                return p
-            else:
-                try: # Try broadcasting
-                     return p.expand(batch_size, 1, self.grid_height, self.grid_width)
-                except RuntimeError:
-                     raise ValueError(f"参数 '{key}' 张量形状 {p.shape} 无法广播/处理。")
-        else:
-             raise TypeError(f"不支持的参数类型 '{key}': {type(p)}")
+        # 使用prepare_parameter函数处理参数
+        from .utils import prepare_parameter
+        return prepare_parameter(
+            p, 
+            target_shape=(self.grid_height, self.grid_width), 
+            batch_size=batch_size, 
+            device=device, 
+            param_name=key
+        )
 
     def _predict_with_encoder_decoder(self, initial_state, params, t_target):
         """使用编码器-解码器架构进行状态预测。"""
+        # 确保初始状态是tensor并且有正确的形状
+        initial_state = ensure_tensor(initial_state)
         batch_size = initial_state.shape[0]
         device = initial_state.device
+        dtype = initial_state.dtype
 
         # 1. 时间编码
-        if isinstance(t_target, (int, float)):
-            t_tensor = torch.full((batch_size, 1), float(t_target), device=device, dtype=torch.float32)
-        elif isinstance(t_target, torch.Tensor):
-             t_target = t_target.to(device)
-             if t_target.numel() == 1: t_tensor = t_target.expand(batch_size, 1)
-             elif t_target.shape == (batch_size, 1) or t_target.shape == (batch_size,): t_tensor = t_target.view(batch_size, 1)
-             else: raise ValueError(f"不支持的目标时间张量形状: {t_target.shape}")
-        else: raise TypeError(f"不支持的目标时间类型: {type(t_target)}")
-        time_features = self.time_encoder(t_tensor.float()) # [B, 64]
+        t_tensor = ensure_tensor(t_target, device=device, dtype=dtype)
+        if t_tensor.numel() == 1:
+            t_tensor = t_tensor.expand(batch_size, 1)
+        elif t_tensor.shape == (batch_size,) or t_tensor.shape == (batch_size, 1):
+            t_tensor = t_tensor.view(batch_size, 1)
+        else:
+            raise ValueError(f"不支持的目标时间张量形状: {t_tensor.shape}")
+            
+        time_features = self.time_encoder(t_tensor) # [B, 64]
 
         # 2. 参数网格准备
         params_grid = []
@@ -338,9 +335,7 @@ class FastscapePINN(nn.Module):
             params_grid.append(p_grid)
 
         # 3. 初始状态准备
-        if initial_state.ndim == 3: initial_state = initial_state.unsqueeze(1)
-        elif initial_state.ndim != 4 or initial_state.shape[1] != 1: raise ValueError(f"initial_state 形状应为 (B, H, W) 或 (B, 1, H, W)，得到 {initial_state.shape}")
-        initial_state = initial_state.float().to(device)
+        initial_state = validate_and_transform_shape(initial_state, (batch_size, 1, self.grid_height, self.grid_width))
 
         # 4. 编码器输入
         encoder_input = torch.cat([initial_state] + params_grid, dim=1) # [B, 1 + num_param_channels, H, W]
@@ -444,26 +439,41 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
     def _sample_at_coords(self, param_grid, x_coords_norm, y_coords_norm):
         """在参数网格上采样局部值 (使用归一化坐标 [0, 1])"""
         if param_grid is None: return torch.zeros_like(x_coords_norm)
+        
+        # 确保输入是tensor
+        param_grid = ensure_tensor(param_grid)
+        x_coords_norm = ensure_tensor(x_coords_norm)
+        y_coords_norm = ensure_tensor(y_coords_norm)
+        
         device = x_coords_norm.device
         dtype = param_grid.dtype # Match param grid dtype
 
         # 确保 param_grid 是 [B, C, H, W]
+        param_grid = validate_and_transform_shape(
+            param_grid, 
+            expected_shape=None  # 这里不强制特定形状，但确保它是tensor
+        )
+        
         if param_grid.ndim == 2: param_grid = param_grid.unsqueeze(0).unsqueeze(0)
         elif param_grid.ndim == 3: param_grid = param_grid.unsqueeze(1)
         param_grid = param_grid.to(device)
 
-        # 转换坐标到 [-1, 1] for grid_sample
-        x_sample = 2.0 * torch.clamp(x_coords_norm, 0, 1) - 1.0
-        y_sample = 2.0 * torch.clamp(y_coords_norm, 0, 1) - 1.0
+        # 使用准备的函数进行grid_sample的坐标转换
+        coords = torch.stack([x_coords_norm, y_coords_norm], dim=-1)  # [N, 1] -> [N, 1, 2] or [N, 2]
+        grid = prepare_grid_sample_coords(coords)
 
-        # 准备采样网格 [B, N, 1, 2]
-        grid = torch.stack([x_sample, y_sample], dim=-1) # [N, 1] -> [N, 1, 2]
-        if grid.ndim == 3: grid = grid.unsqueeze(0) # Add batch dim if needed -> [1, N, 1, 2]
-        if grid.shape[0] != param_grid.shape[0]: grid = grid.expand(param_grid.shape[0], -1, -1, -1)
+        # 确保批次维度匹配
+        if grid.shape[0] != param_grid.shape[0]:
+            grid = grid.expand(param_grid.shape[0], -1, -1, -1)
 
         # 采样 [B, C, N, 1]
-        # MODIFIED: Set align_corners=True for sampling with [0,1] normalized coords converted to [-1,1]
-        sampled = F.grid_sample(param_grid, grid.to(dtype), mode='bilinear', padding_mode='border', align_corners=True)
+        sampled = F.grid_sample(
+            param_grid, 
+            grid, 
+            mode='bilinear', 
+            padding_mode='border', 
+            align_corners=True
+        )
 
         # Reshape to [N, C] (average over batch if B > 1)
         if sampled.shape[0] > 1: sampled = sampled.mean(dim=0)
@@ -472,11 +482,12 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
 
     def _encode_time(self, t_target, batch_size, device, dtype):
         """将时间编码为特征向量 (简化)"""
-        if isinstance(t_target, (int, float)):
-            t_tensor = torch.full((batch_size, 1), float(t_target), device=device, dtype=dtype)
-        elif isinstance(t_target, torch.Tensor):
-            t_tensor = t_target.to(device=device, dtype=dtype).view(batch_size, 1)
-        else: raise TypeError(f"不支持的目标时间类型: {type(t_target)}")
+        # 确保t_target是tensor并具有正确的形状
+        t_tensor = ensure_tensor(t_target, device=device, dtype=dtype)
+        if t_tensor.numel() == 1:
+            t_tensor = t_tensor.expand(batch_size, 1)
+        else:
+            t_tensor = t_tensor.view(batch_size, 1)
         return t_tensor * 0.01 # 简单缩放
 
     def _fuse_time_features(self, spatial_features, time_features):
@@ -488,6 +499,8 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
 
     def _process_with_cnn(self, initial_state, k_field, u_field, t_target):
         """使用CNN处理（通常是小尺寸或基础分辨率）"""
+        # 确保输入是tensor并具有一致的数据类型
+        initial_state = ensure_tensor(initial_state)
         device = initial_state.device
         dtype = initial_state.dtype
         batch_size = initial_state.shape[0]
@@ -652,6 +665,8 @@ class AdaptiveFastscapePINN(TimeDerivativePINN): # Inherit from base class
 
     def _predict_state_adaptive(self, initial_state, params, t_target):
         """优化的网格状态预测，支持多分辨率处理"""
+        # 确保输入是tensor，并验证形状
+        initial_state = ensure_tensor(initial_state)
         input_shape = initial_state.shape[-2:] # H, W
         batch_size = initial_state.shape[0]
         device = initial_state.device

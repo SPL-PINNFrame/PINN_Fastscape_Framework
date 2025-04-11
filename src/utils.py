@@ -312,6 +312,156 @@ def save_config(config, filepath):
     except Exception as e:
         logging.error(f"Error saving config file {filepath}: {e}")
 
+# 新增函数：确保数据是张量并有正确的设备和数据类型
+def ensure_tensor(data, device=None, dtype=None):
+    """确保输入为张量，并转换到指定设备和数据类型
+    
+    Args:
+        data: 输入数据（可以是数字、NumPy数组或PyTorch张量）
+        device: 目标设备（如果为None则不改变设备）
+        dtype: 目标数据类型（如果为None则不改变数据类型）
+        
+    Returns:
+        torch.Tensor: 转换后的张量
+    """
+    if not isinstance(data, torch.Tensor):
+        if isinstance(data, np.ndarray):
+            data = torch.from_numpy(data)
+        elif isinstance(data, (int, float, list, tuple)):
+            data = torch.tensor(data, dtype=dtype or torch.float32)
+        else:
+            raise TypeError(f"无法转换类型: {type(data)}")
+    
+    if device is not None:
+        data = data.to(device)
+    if dtype is not None:
+        data = data.to(dtype)
+    return data
+
+# 新增函数：验证张量形状并进行必要转换
+def validate_and_transform_shape(tensor, expected_shape=None, allow_broadcasting=True):
+    """验证张量形状并尝试转换为期望形状
+    
+    Args:
+        tensor: 输入张量
+        expected_shape: 期望的形状元组，None则不检查
+        allow_broadcasting: 是否允许尝试广播到目标形状
+        
+    Returns:
+        torch.Tensor: 验证或转换后的张量
+    """
+    if expected_shape is None:
+        return tensor
+        
+    if tensor.shape == expected_shape:
+        return tensor
+        
+    if allow_broadcasting and can_broadcast_to(tensor.shape, expected_shape):
+        return broadcast_to_shape(tensor, expected_shape)
+    
+    raise ValueError(f"张量形状 {tensor.shape} 与期望形状 {expected_shape} 不兼容")
+
+# 辅助函数：检查是否可以广播
+def can_broadcast_to(shape, target_shape):
+    """检查shape是否可以广播到target_shape
+    
+    Args:
+        shape: 源形状
+        target_shape: 目标形状
+        
+    Returns:
+        bool: 是否可以广播
+    """
+    if len(shape) > len(target_shape):
+        return False
+        
+    # 从右向左比较维度
+    for i in range(1, len(shape) + 1):
+        if shape[-i] != 1 and shape[-i] != target_shape[-i]:
+            return False
+            
+    return True
+
+# 辅助函数：执行张量广播
+def broadcast_to_shape(tensor, target_shape):
+    """将张量广播到目标形状
+    
+    Args:
+        tensor: 输入张量
+        target_shape: 目标形状
+        
+    Returns:
+        torch.Tensor: 广播后的张量
+    """
+    # 如果形状相同则无需操作
+    if tensor.shape == target_shape:
+        return tensor
+        
+    # 处理维度数量不足的情况
+    if len(tensor.shape) < len(target_shape):
+        # 在前面添加维度
+        tensor = tensor.view(*([1] * (len(target_shape) - len(tensor.shape))), *tensor.shape)
+    
+    # 尝试使用expand进行广播
+    try:
+        return tensor.expand(target_shape)
+    except RuntimeError:
+        raise ValueError(f"无法将形状为 {tensor.shape} 的张量广播到 {target_shape}")
+
+# 新增函数：创建标准网格坐标
+def create_normalized_grid(shape, device=None, dtype=None):
+    """创建标准化的网格坐标，返回坐标点和网格
+    
+    Args:
+        shape: 网格形状 (H, W)
+        device: 目标设备
+        dtype: 目标数据类型
+        
+    Returns:
+        tuple: (coords, grid)
+            - coords: 扁平化的坐标点 [H*W, 2]
+            - grid: 网格坐标 [H, W, 2]
+    """
+    height, width = shape
+    y_coords = torch.linspace(0, 1, height, device=device, dtype=dtype)
+    x_coords = torch.linspace(0, 1, width, device=device, dtype=dtype)
+    grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing='ij')
+    
+    # 创建网格 [H, W, 2]
+    grid = torch.stack([grid_x, grid_y], dim=2)
+    
+    # 创建扁平化坐标 [H*W, 2]
+    coords = grid.reshape(-1, 2)
+    
+    return coords, grid
+
+# 新增函数：坐标转换为grid_sample格式
+def prepare_grid_sample_coords(coords, normalize=True):
+    """准备用于torch.nn.functional.grid_sample的坐标
+    
+    Args:
+        coords: 输入坐标，范围[0,1]
+        normalize: 是否需要归一化到[-1,1]范围
+        
+    Returns:
+        torch.Tensor: 用于grid_sample的坐标网格
+    """
+    if normalize:
+        # grid_sample要求[-1,1]范围
+        coords = 2.0 * coords - 1.0
+    
+    # 确保形状正确：[B, H, W, 2]
+    if coords.ndim == 3 and coords.shape[-1] == 2:
+        # [H, W, 2] -> [1, H, W, 2]
+        coords = coords.unsqueeze(0)
+    elif coords.ndim == 2 and coords.shape[-1] == 2:
+        # 一维坐标点需要重塑为网格
+        raise ValueError("一维坐标列表需要先重塑为网格")
+    
+    return coords
+
+# 保留原有的函数
+
 def prepare_parameter(param_value, target_shape=None, batch_size=None, device=None, dtype=None, param_name="unknown"):
     """
     统一处理不同形式的参数值，确保输出一致的形状和类型。
@@ -499,6 +649,25 @@ def standardize_coordinate_system(coords, domain_x=(0, 1), domain_y=(0, 1),
     
     return result
 
+# 新增函数：规范化grid_sample操作
+def normalize_grid_sample(grid, input_range=(0, 1), output_range=(-1, 1)):
+    """将坐标网格从一个范围转换到另一个范围，通常用于grid_sample操作
+    
+    Args:
+        grid: 输入坐标网格
+        input_range: 输入范围，默认为(0, 1)
+        output_range: 输出范围，默认为(-1, 1)用于grid_sample
+        
+    Returns:
+        torch.Tensor: 转换后的坐标网格
+    """
+    in_min, in_max = input_range
+    out_min, out_max = output_range
+    
+    # 线性映射: (x - in_min) / (in_max - in_min) * (out_max - out_min) + out_min
+    grid_normalized = (grid - in_min) / (in_max - in_min) * (out_max - out_min) + out_min
+    return grid_normalized
+
 if __name__ == '__main__':
     # Example usage
     # Setup basic logging for standalone run info
@@ -533,3 +702,42 @@ if __name__ == '__main__':
         logging.info("Cleaned up temp_logs directory.")
 
     logging.info("Utils testing done.")
+
+    # 测试新增的函数
+    import sys
+    if 'pytest' not in sys.modules:
+        # Only run when not in pytest
+        logging.info("Testing new tensor utilities...")
+        
+        # Test ensure_tensor
+        data1 = 5.0
+        data2 = np.array([1, 2, 3])
+        data3 = torch.tensor([4, 5, 6])
+        
+        t1 = ensure_tensor(data1)
+        t2 = ensure_tensor(data2)
+        t3 = ensure_tensor(data3, dtype=torch.float64)
+        
+        logging.info(f"ensure_tensor results: {t1}, {t2}, {t3}")
+        
+        # Test validate_and_transform_shape
+        t4 = torch.ones(2, 3)
+        t5 = validate_and_transform_shape(t4, (2, 3))
+        t6 = validate_and_transform_shape(t4.unsqueeze(0), (1, 2, 3))
+        
+        try:
+            t7 = validate_and_transform_shape(t4, (3, 4), allow_broadcasting=False)
+        except ValueError as e:
+            logging.info(f"Expected error: {e}")
+            
+        logging.info(f"validate_and_transform_shape results: {t5.shape}, {t6.shape}")
+        
+        # Test create_normalized_grid
+        coords, grid = create_normalized_grid((4, 6))
+        logging.info(f"create_normalized_grid results: coords shape {coords.shape}, grid shape {grid.shape}")
+        
+        # Test normalize_grid_sample
+        normalized_grid = normalize_grid_sample(grid)
+        logging.info(f"normalize_grid_sample result range: {normalized_grid.min().item()} to {normalized_grid.max().item()}")
+        
+        logging.info("Tensor utilities test completed.")
