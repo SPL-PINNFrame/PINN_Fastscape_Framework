@@ -11,8 +11,8 @@ from src.physics import (
     calculate_drainage_area_differentiable_optimized,
     stream_power_erosion,
     hillslope_diffusion,
-    calculate_dhdt_physics,
-    validate_drainage_area # Keep test for the validation utility itself
+    calculate_dhdt_physics
+    # validate_drainage_area has been removed from tests
 )
 # Removed import from src.derivatives
 
@@ -254,37 +254,5 @@ def test_calculate_dhdt_physics_components(parabolic_terrain, dtype, device):
 # TODO: Add gradcheck for calculate_dhdt_physics w.r.t input 'h'. This is important!
 
 # --- Test for validate_drainage_area utility ---
-# This requires mocking xsimlab and fastscape imports
-
-@pytest.mark.skip(reason="Requires mocking xsimlab/fastscape or having them installed.")
-def test_validate_drainage_area_utility(simple_terrain, device, dtype):
-    """Tests the validate_drainage_area utility function structure."""
-    h = simple_terrain.to(device).type(dtype)
-    dx, dy = 1.0, 1.0
-
-    # Mock the D8 calculation part
-    with patch('src.physics.xs.create_setup') as mock_setup, \
-         patch('src.physics.xs.Model') as mock_model, \
-         patch('xsimlab.runtime.run_simulation') as mock_run: # Need to find the right run function to mock
-
-        # Simulate a successful D8 run returning some dummy data
-        dummy_d8_result_ds = MagicMock()
-        dummy_d8_area = torch.rand_like(h.squeeze()) * 100 # Dummy D8 area
-        dummy_d8_result_ds.__getitem__.return_value.squeeze.return_value.values = dummy_d8_area.cpu().numpy()
-        mock_run.return_value = dummy_d8_result_ds
-
-        results = validate_drainage_area(h, dx, dy)
-
-        assert isinstance(results, dict)
-        assert 'max_relative_error' in results
-        assert 'mean_relative_error' in results
-        assert 'rmse' in results
-        assert 'correlation_coefficient' in results
-        assert 'river_network_jaccard' in results
-        # Check if values are floats (or nan)
-        assert isinstance(results['rmse'], float)
-
-    # Test failure case (e.g., xsimlab import error)
-    with patch('src.physics.xs', None): # Simulate import error
-         results_fail = validate_drainage_area(h, dx, dy)
-         assert np.isnan(results_fail['rmse']) # Expect NaN if D8 fails
+# 注意：此测试已被移除，因为它需要Fastscape实现
+# 将在后续单独实现集水效果测试

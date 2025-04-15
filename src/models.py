@@ -130,11 +130,11 @@ class TimeDerivativePINN(nn.Module):
 
             # 前向时间步
             x_forward = x.copy()
-            x_forward['t'] = t + delta_t
+            x_forward['t'] = t + delta_t/2  # 使用半个时间步长以保持与 predict_state 模式一致
 
             # 后向时间步
             x_backward = x.copy()
-            x_backward['t'] = t - delta_t
+            x_backward['t'] = t - delta_t/2  # 使用半个时间步长以保持与 predict_state 模式一致
 
         elif mode == 'predict_state':
             # 状态模式下，修改't_target'键
@@ -162,10 +162,10 @@ class TimeDerivativePINN(nn.Module):
 
         # 使用中心差分计算导数
         if isinstance(pred_forward, dict) and 'state' in pred_forward:
-            derivative_fd = (pred_forward['state'] - pred_backward['state']) / (2 * delta_t)
+            derivative_fd = (pred_forward['state'] - pred_backward['state']) / delta_t  # 已经使用了半个时间步长，所以这里是 delta_t 而不是 2*delta_t
         else:
             # Assume single output is state
-            derivative_fd = (pred_forward - pred_backward) / delta_t
+            derivative_fd = (pred_forward - pred_backward) / delta_t  # 已经使用了半个时间步长
 
         # 恢复原始模式
         self.set_output_mode(state=original_state, derivative=original_derivative)

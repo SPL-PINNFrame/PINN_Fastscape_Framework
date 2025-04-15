@@ -53,7 +53,7 @@ class PINNTrainer:
     """Handles the training and validation loops for the PINN model."""
     def __init__(self, model, config, train_loader, val_loader):
         """初始化PINN训练器。
-        
+
         Args:
             model: PINN 模型
             config: 配置字典，包含训练参数、物理参数等
@@ -64,7 +64,7 @@ class PINNTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.config = config
-        
+
         # 检查模型类型并确定它的输出能力
         self.is_dual_output_capable = isinstance(model, TimeDerivativePINN)
         if self.is_dual_output_capable:
@@ -73,7 +73,7 @@ class PINNTrainer:
             logging.info(f"模型初始输出模式: {initial_modes}")
         else:
             logging.info("模型不是 TimeDerivativePINN 的实例，可能不支持双输出模式。")
-        
+
         # Training config
         if 'trainer' in config:
             self.train_config = config['trainer']
@@ -125,23 +125,23 @@ class PINNTrainer:
         train_settings = self.train_config.get('training', self.train_config)
         # First look in training subsection, then fallback to top level, then use model-appropriate default
         self.pde_loss_method = train_settings.get(
-            'pde_loss_method', 
+            'pde_loss_method',
             self.train_config.get(
-                'pde_loss_method', 
+                'pde_loss_method',
                 'dual_output' if self.is_dual_output_capable else 'grid_focused'
             )
         )
-        
+
         self.n_collocation = self.train_config.get('n_collocation', 1000)
-        
+
         # 根据选择的损失计算方法设置模型输出模式
         self._configure_model_for_selected_pde_method()
-        
+
         # 检查物理损失方法与模型兼容性
         if self.pde_loss_method == 'dual_output' and not self.is_dual_output_capable:
             logging.warning("选择了'dual_output'损失方法，但模型不是TimeDerivativePINN子类。将回退到'grid_focused'方法。")
             self.pde_loss_method = 'grid_focused'
-            
+
         # 显示选择的损失计算方法
         logging.info(f"使用损失计算方法: {self.pde_loss_method}")
 
@@ -150,7 +150,7 @@ class PINNTrainer:
         self.max_epochs = self.train_config.get('max_epochs', 100)
         self.checkpoint_freq = self.train_config.get('checkpoint_freq', 10)
         self.results_dir = self.train_config.get('results_dir', 'results')
-        
+
         self.domain_x = (0.0, 1.0)  # Default domain, override with actual data
         self.domain_y = (0.0, 1.0)  # Default domain, override with actual data
         # Try to extract domain from data
@@ -199,7 +199,7 @@ class PINNTrainer:
         if not self.is_dual_output_capable:
             logging.debug("模型不是TimeDerivativePINN的子类，跳过输出模式配置。")
             return
-            
+
         if self.pde_loss_method == 'dual_output':
             # 双输出模式：同时需要状态和导数
             self.model.set_output_mode(state=True, derivative=True)
@@ -607,11 +607,23 @@ class PINNTrainer:
 
             # LR Scheduler step (if epoch-based)
             if self.scheduler and not isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                # 记录步进前的学习率
+                old_lr = self.optimizer.param_groups[0]['lr']
+
+                # 执行学习率调度器步进
                 self.scheduler.step()
+
+                # 获取当前学习率
                 current_lr = self.optimizer.param_groups[0]['lr']
+
+                # 记录到TensorBoard
                 self.writer.add_scalar('LearningRate', current_lr, epoch)
-                if (epoch + 1) % 10 == 0: # Log LR less frequently for epoch-based schedulers
-                     logging.info(f"Epoch {epoch} LR: {current_lr:.6e}")
+
+                # 打印学习率变化信息
+                if current_lr != old_lr:
+                    logging.info(f"Epoch {epoch} LR changed: {old_lr:.6e} -> {current_lr:.6e}")
+                elif (epoch + 1) % 10 == 0: # 如果没有变化，则每10个周期记录一次
+                    logging.info(f"Epoch {epoch} LR: {current_lr:.6e}")
 
             epoch_duration = time.time() - epoch_start_time
             logging.info(f"Epoch {epoch} completed in {epoch_duration:.2f} seconds.")
@@ -701,51 +713,51 @@ class PINNTrainer:
             device = torch.device(device_str)
         logging.info(f"使用设备: {device}")
         return device
-        
+
     def _setup_optimizer(self):
         """设置优化器"""
         optimizer_name = self.optimizer_type.lower()
         params = self.model.parameters()
-        
+
         if optimizer_name == 'adam':
             optimizer = optim.Adam(
-                params, 
-                lr=self.learning_rate, 
+                params,
+                lr=self.learning_rate,
                 weight_decay=self.weight_decay
             )
         elif optimizer_name == 'adamw':
             optimizer = optim.AdamW(
-                params, 
-                lr=self.learning_rate, 
+                params,
+                lr=self.learning_rate,
                 weight_decay=self.weight_decay
             )
         elif optimizer_name == 'sgd':
             momentum = self.train_config.get('momentum', 0.9)
             optimizer = optim.SGD(
-                params, 
-                lr=self.learning_rate, 
-                momentum=momentum, 
+                params,
+                lr=self.learning_rate,
+                momentum=momentum,
                 weight_decay=self.weight_decay
             )
         elif optimizer_name == 'lbfgs':
             optimizer = optim.LBFGS(
-                params, 
-                lr=self.learning_rate, 
+                params,
+                lr=self.learning_rate,
                 line_search_fn="strong_wolfe"
             )
         else:
             raise ValueError(f"不支持的优化器类型: {optimizer_name}")
-            
+
         logging.info(f"已创建优化器: {optimizer_name}, 学习率: {self.learning_rate}, 权重衰减: {self.weight_decay}")
         return optimizer
-        
+
     def _setup_lr_scheduler(self):
         """设置学习率调度器"""
         # Use self.scheduler_config read during __init__
         scheduler_config = self.scheduler_config
         # Handle case where scheduler_type might be None from config
         scheduler_name = self.scheduler_type.lower() if isinstance(self.scheduler_type, str) else 'none'
-        
+
         if scheduler_name == 'step':
             step_size = scheduler_config.get('step_size', 30)
             gamma = scheduler_config.get('gamma', 0.1)
@@ -755,7 +767,7 @@ class PINNTrainer:
                 gamma=gamma
             )
             logging.info(f"使用StepLR调度器, step_size={step_size}, gamma={gamma}")
-            
+
         elif scheduler_name == 'plateau':
             patience = scheduler_config.get('patience', 10)
             factor = scheduler_config.get('factor', 0.1)
@@ -767,7 +779,7 @@ class PINNTrainer:
                 verbose=True
             )
             logging.info(f"使用ReduceLROnPlateau调度器, patience={patience}, factor={factor}")
-            
+
         elif scheduler_name == 'cosine':
             t_max = scheduler_config.get('t_max', self.max_epochs)
             eta_min = scheduler_config.get('eta_min', 0)
@@ -777,15 +789,15 @@ class PINNTrainer:
                 eta_min=eta_min
             )
             logging.info(f"使用CosineAnnealingLR调度器, T_max={t_max}, eta_min={eta_min}")
-            
+
         elif scheduler_name == 'none':
             scheduler = None
             logging.info("不使用学习率调度器")
-            
+
         else:
             logging.warning(f"未知的调度器类型: {scheduler_name}, 不使用学习率调度")
             scheduler = None
-            
+
         return scheduler
 
 

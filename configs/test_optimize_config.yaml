@@ -1,0 +1,81 @@
+# Configuration for pytest end-to-end optimization test
+
+# General settings
+output_dir: pytest_results/ # Relative to project root (cwd of the script)
+run_name: pinn_pytest_optimize_run
+seed: 42
+device: cpu # Force CPU for lower hardware requirements and consistency in tests
+use_mixed_precision: false
+
+# Mock checkpoint path for testing - will be set dynamically in the test
+
+# Model settings
+model:
+  name: AdaptiveFastscapePINN # Specify the model type to load
+  output_dim: 1
+  hidden_dim: 16 # Very small MLP
+  num_layers: 2
+  base_resolution: 16 # For Adaptive model testing
+  max_resolution: 32 # For Adaptive model testing
+  input_dim: 5
+  domain_x: [0.0, 100.0] # Explicitly set domain_x
+  domain_y: [0.0, 100.0] # Explicitly set domain_y
+  dtype: float32
+
+# Physics parameters
+physics_params:
+  # Parameters used by the physics equations
+  m: 0.5 # spl__area_exp
+  n: 1.0 # spl__slope_exp
+
+  # Parameters needed for calculations (grid spacing, domain size)
+  dx: 6.25 # Pre-calculated: 100.0 / (17 - 1)
+  dy: 6.25 # Pre-calculated: 100.0 / (17 - 1)
+  domain_x: [0.0, 100.0] # Corresponds to grid_length[1]
+  domain_y: [0.0, 100.0] # Corresponds to grid_length[0]
+  grid_height: 17 # Explicitly provide grid dimensions needed by some loss functions
+  grid_width: 17
+  total_time: 500.0 # Match run time
+
+  # Parameters for drainage area calculation
+  drainage_area_kwargs:
+    temp: 0.05
+    num_iters: 10
+
+# Target data
+target_dem_path: pytest_data/synthetic_target_dem.npy # Will be created by the test
+
+# Fixed inputs
+fixed_inputs:
+  initial_topography: pytest_data/synthetic_initial_topo.npy # Will be created by the test
+
+# Fixed parameters
+fixed_parameters:
+  m: 0.5
+  n: 1.0
+  K_d: 0.01
+
+# Parameters to optimize
+parameters_to_optimize:
+  K_f:
+    initial_guess_type: constant
+    initial_value: 1.0e-6
+    bounds: [1.0e-7, 1.0e-4]
+    optimize_type: scalar
+  U:
+    initial_guess_type: constant
+    initial_value: 0.0005
+    bounds: [0.0001, 0.001]
+    optimize_type: scalar
+
+# Optimization settings
+optimization:
+  method: L-BFGS-B
+  max_iter: 3 # Very few iterations for testing
+  tolerance: 1.0e-4
+  learning_rate: 0.01
+  loss_function: mse
+  regularization:
+    enabled: false
+    type: l2
+    weight: 0.001
