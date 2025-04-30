@@ -1,4 +1,5 @@
 import os
+import sys # Added import
 import logging
 import random
 import numpy as np
@@ -338,9 +339,14 @@ def prepare_parameter(param_value, target_shape=None, batch_size=None, device=No
     import logging
     
     # 处理 None 值
+    # 处理 None 值
     if param_value is None:
-        logging.warning(f"参数 '{param_name}' 为 None，返回值为 None")
-        return None
+        if target_shape is not None and batch_size is not None and device is not None and dtype is not None:
+            logging.warning(f"参数 '{param_name}' 为 None，返回形状为 {(batch_size, 1, *target_shape)} 的零张量")
+            return torch.zeros((batch_size, 1, *target_shape), device=device, dtype=dtype)
+        else:
+            logging.warning(f"参数 '{param_name}' 为 None 且缺少形状/设备/类型信息，返回值为 None")
+            return None
     
     # 获取设备参考
     if device is None and isinstance(param_value, torch.Tensor):
@@ -380,6 +386,10 @@ def prepare_parameter(param_value, target_shape=None, batch_size=None, device=No
         elif param_tensor.ndim == 1 and param_tensor.shape[0] == batch_size:
             # 批次向量 [B]，扩展为 [B, 1, H, W]
             return param_tensor.view(batch_size, 1, 1, 1).expand(batch_size, 1, *target_shape)
+        
+        elif param_tensor.ndim == 2 and param_tensor.shape[0] == batch_size and param_tensor.shape[1] == 1:
+             # 批次标量 [B, 1]，扩展为 [B, 1, H, W]
+             return param_tensor.view(batch_size, 1, 1, 1).expand(batch_size, 1, *target_shape)
             
         elif param_tensor.ndim == 2 and param_tensor.shape == target_shape:
             # 空间场 [H, W]，扩展为 [B, 1, H, W]

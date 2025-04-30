@@ -3,7 +3,25 @@ import torch
 import torch.nn.functional as F
 import math # For sqrt(2)
 import logging
+import warnings
+from typing import Dict, Tuple, Union, Optional, List
 from .utils import ErrorHandler
+
+# Import enhanced drainage area calculation if available
+try:
+    from .drainage_area_enhanced import calculate_drainage_area_enhanced
+    HAS_ENHANCED_DRAINAGE = True
+except ImportError:
+    HAS_ENHANCED_DRAINAGE = False
+    logging.warning("Enhanced drainage area calculation not available. Using original implementation.")
+
+# Import IDA-based drainage area calculation if available
+try:
+    from .drainage_area_ida import calculate_drainage_area_ida_dinf_torch
+    HAS_IDA_DRAINAGE = True
+except ImportError:
+    HAS_IDA_DRAINAGE = False
+    logging.warning("IDA-based drainage area calculation not available. Using other implementations.")
 
 # -----------------------------------------------------------------------------
 # Terrain Derivatives (Differentiable using PyTorch Conv2d)
@@ -122,7 +140,7 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
     """优化的可微分汇水面积计算，使用PyTorch的内置操作减少循环"""
     # 创建错误处理器
     error_handler = ErrorHandler(max_retries=1)
-    
+
     batch_size, _, height, width = h.shape
     device = h.device
     cell_area = dx * dy
@@ -177,22 +195,22 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
         # 仅考虑下坡流向 (negative slopes)
         # Use -slopes in softmax, clamp positive slopes to ensure near-zero probability
         softmax_input = -slope_values / temperature
-        softmax_input = torch.where(slopes >= 0, 
-                                   torch.full_like(softmax_input, -torch.finfo(softmax_input.dtype).max), 
+        softmax_input = torch.where(slopes >= 0,
+                                   torch.full_like(softmax_input, -torch.finfo(softmax_input.dtype).max),
                                    softmax_input)
         # Clamp to prevent overflow in exp()
         softmax_input = torch.clamp(softmax_input, max=80)
         return F.softmax(softmax_input, dim=1)  # [B, 8, H, W]
-    
+
     # 首先尝试正常的温度
     weights = compute_flow_weights(slopes, temp)
-    
+
     # 如果计算失败或包含NaN，尝试使用更高的温度
     if weights is None or torch.isnan(weights).any():
         logging.warning(f"在温度 {temp} 下计算流向权重失败或产生了NaN值。尝试更高的温度...")
         higher_temp = temp * 10  # 增加温度使softmax更平滑
         weights = compute_flow_weights(slopes, higher_temp)
-        
+
         if weights is None or torch.isnan(weights).any():
             logging.error(f"即使在更高的温度 {higher_temp} 下，计算流向权重仍然失败。使用均匀权重。")
             # 创建均匀权重作为后备
@@ -224,25 +242,25 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
 
     # 使用错误处理上下文进行迭代计算
     with error_handler.handling_context(
-        retry_on=[RuntimeError], 
-        ignore=[], 
+        retry_on=[RuntimeError],
+        ignore=[],
         reraise=False,
         max_retries=2
     ) as err_ctx:
-        
+
         # 优化：增加迭代次数以提高准确性
         actual_iters = min(max(num_iters, 30), 100)  # 确保迭代次数足够但不过多
-        
-        if verbose: 
+
+        if verbose:
             logging.info(f"使用简化迭代流量累积 ({actual_iters} 迭代)。")
-            
+
         try:
             for _ in range(actual_iters):
                 # 检查是否需要重试
                 if err_ctx.retries > 0:
                     # 如果是重试，简化计算或使用不同的策略
                     logging.info("使用稳定化迭代计算汇水面积...")
-                    
+
                 inflow = torch.zeros_like(drainage_area)
                 # Pad current drainage area to access neighbor values easily
                 da_padded = F.pad(drainage_area, (1, 1, 1, 1), mode='constant', value=0)
@@ -260,36 +278,36 @@ def calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=1.0, temp
 
                 # Update drainage area: local flow + inflow from all neighbors
                 drainage_area = local_flow + inflow
-                
+
                 # 稳定性检查
                 if torch.isnan(drainage_area).any():
                     raise RuntimeError("汇水面积计算中检测到NaN值，正在重试...")
-                    
+
                 if torch.isinf(drainage_area).any():
                     raise RuntimeError("汇水面积计算中检测到Inf值，正在重试...")
-        
+
         except Exception as e:
             logging.error(f"汇水面积计算失败: {str(e)}")
             # 发生错误时，返回一个简单的估计
             # 对于简单表面，这可能是合理的近似
             drainage_area = local_flow.clone()
-            
+
             # 为洼地创建一个简单的汇聚模式
             # 查找局部最小值
             h_pad = F.pad(h, (1, 1, 1, 1), mode='constant', value=float('inf'))
             is_min = True
-            
+
             # 检查8个相邻点，确定每个点是否为局部最小值
             for dy_offset, dx_offset in offsets:
-                neighbor_h = h_pad[:, :, 
-                                    1+dy_offset:height+1+dy_offset, 
+                neighbor_h = h_pad[:, :,
+                                    1+dy_offset:height+1+dy_offset,
                                     1+dx_offset:width+1+dx_offset]
                 is_min = is_min & (h <= neighbor_h)
-            
+
             # 对局部最小值进行特殊处理（增加汇聚）
             min_mask = is_min.float() * 5.0  # 增强因子
             drainage_area = drainage_area * (1.0 + min_mask)
-            
+
             logging.warning("使用简化的汇水面积估计。")
 
     return drainage_area
@@ -373,9 +391,45 @@ def calculate_dhdt_physics(h, U, K_f, m, n, K_d, dx, dy, precip=1.0, padding_mod
     # Calculate slope magnitude using the function defined in this file
     slope_mag = calculate_slope_magnitude(h, dx, dy, padding_mode=padding_mode)
 
-    # Use the optimized drainage area function
+    # Use the drainage area function (IDA, enhanced, or original version)
     da_params = da_optimize_params if da_optimize_params is not None else {}
-    drainage_area = calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=precip, **da_params)
+
+    # Check which version should be used
+    use_ida = da_params.pop('use_ida', True) and HAS_IDA_DRAINAGE
+    use_enhanced = da_params.pop('use_enhanced', False) and HAS_ENHANCED_DRAINAGE
+
+    if use_ida:
+        # Map parameters to IDA version
+        ida_params = {
+            'omega': da_params.pop('omega', 1.0),
+            'solver_max_iters': da_params.pop('solver_max_iters', 2000),
+            'solver_tol': da_params.pop('solver_tol', 1e-7),
+            'eps': da_params.pop('eps', 1e-10),
+            'verbose': da_params.pop('verbose', False)
+        }
+        # Add any remaining parameters
+        ida_params.update(da_params)
+
+        drainage_area = calculate_drainage_area_ida_dinf_torch(h, dx, dy, precip=precip, **ida_params)
+    elif use_enhanced:
+        # Map parameters to enhanced version
+        enhanced_params = {
+            'initial_temp': da_params.pop('temp', 0.01),
+            'end_temp': da_params.pop('min_temp', 1e-5),
+            'annealing_factor': da_params.pop('annealing_factor', 0.98),
+            'max_iters': da_params.pop('num_iters', 50),
+            'lambda_dir': da_params.pop('lambda_dir', 1.0),
+            'convergence_threshold': da_params.pop('convergence_threshold', 1e-5),
+            'special_depression_handling': da_params.pop('special_depression_handling', True),
+            'verbose': da_params.pop('verbose', False)
+        }
+        # Add any remaining parameters
+        enhanced_params.update(da_params)
+
+        drainage_area = calculate_drainage_area_enhanced(h, dx, dy, precip=precip, **enhanced_params)
+    else:
+        # Use original implementation
+        drainage_area = calculate_drainage_area_differentiable_optimized(h, dx, dy, precip=precip, **da_params)
 
     erosion_rate = stream_power_erosion(h, drainage_area, slope_mag, K_f, m, n)
 
@@ -417,9 +471,48 @@ def validate_drainage_area(h, dx, dy, pinn_method_params=None, d8_method='fastsc
     h_np = h.squeeze().detach().cpu().numpy() # Remove B, C dims
 
     # 计算可微分方法的汇水面积
-    da_diff_torch = calculate_drainage_area_differentiable_optimized(
-        h, dx, dy, **pinn_method_params
-    )
+    # Check which version should be used
+    use_ida = pinn_method_params.pop('use_ida', True) and HAS_IDA_DRAINAGE
+    use_enhanced = pinn_method_params.pop('use_enhanced', False) and HAS_ENHANCED_DRAINAGE
+
+    if use_ida:
+        # Map parameters to IDA version
+        ida_params = {
+            'omega': pinn_method_params.pop('omega', 1.0),
+            'solver_max_iters': pinn_method_params.pop('solver_max_iters', 2000),
+            'solver_tol': pinn_method_params.pop('solver_tol', 1e-7),
+            'eps': pinn_method_params.pop('eps', 1e-10),
+            'verbose': pinn_method_params.pop('verbose', False)
+        }
+        # Add any remaining parameters
+        ida_params.update(pinn_method_params)
+
+        da_diff_torch = calculate_drainage_area_ida_dinf_torch(
+            h, dx, dy, **ida_params
+        )
+    elif use_enhanced:
+        # Map parameters to enhanced version
+        enhanced_params = {
+            'initial_temp': pinn_method_params.pop('temp', 0.01),
+            'end_temp': pinn_method_params.pop('min_temp', 1e-5),
+            'annealing_factor': pinn_method_params.pop('annealing_factor', 0.98),
+            'max_iters': pinn_method_params.pop('num_iters', 50),
+            'lambda_dir': pinn_method_params.pop('lambda_dir', 1.0),
+            'convergence_threshold': pinn_method_params.pop('convergence_threshold', 1e-5),
+            'special_depression_handling': pinn_method_params.pop('special_depression_handling', True),
+            'verbose': pinn_method_params.pop('verbose', False)
+        }
+        # Add any remaining parameters
+        enhanced_params.update(pinn_method_params)
+
+        da_diff_torch = calculate_drainage_area_enhanced(
+            h, dx, dy, **enhanced_params
+        )
+    else:
+        # Use original implementation
+        da_diff_torch = calculate_drainage_area_differentiable_optimized(
+            h, dx, dy, **pinn_method_params
+        )
     da_diff = da_diff_torch.squeeze().detach().cpu().numpy()
 
     # --- 使用 xsimlab 计算 D8 汇水面积作为基准 ---

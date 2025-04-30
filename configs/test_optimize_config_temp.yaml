@@ -1,0 +1,72 @@
+device: cpu
+fixed_inputs:
+  initial_topography: pytest_data/synthetic_initial_topo.npy
+fixed_parameters:
+  K_d: 0.01
+  m: 0.5
+  n: 1.0
+initial_topo_path: "D:\\OneDrive\\MR.Z  \u6240\u6709\u8D44\u6599\\code\\PINN_TEST\\\
+  PINN_Fastscape_Framework\\pytest_data\\synthetic_initial_topo.npy"
+model:
+  base_resolution: 16
+  domain_x:
+  - 0.0
+  - 100.0
+  domain_y:
+  - 0.0
+  - 100.0
+  dtype: float32
+  hidden_dim: 16
+  input_dim: 5
+  max_resolution: 32
+  name: AdaptiveFastscapePINN
+  num_layers: 2
+  output_dim: 1
+optimization:
+  learning_rate: 0.01
+  loss_function: mse
+  max_iter: 3
+  method: L-BFGS-B
+  regularization:
+    enabled: false
+    type: l2
+    weight: 0.001
+  tolerance: 0.0001
+output_dir: pytest_results/
+parameters_to_optimize:
+  K_f:
+    bounds:
+    - 1.0e-07
+    - 0.0001
+    initial_guess_type: constant
+    initial_value: 1.0e-06
+    optimize_type: scalar
+  U:
+    bounds:
+    - 0.0001
+    - 0.001
+    initial_guess_type: constant
+    initial_value: 0.0005
+    optimize_type: scalar
+physics_params:
+  domain_x:
+  - 0.0
+  - 100.0
+  domain_y:
+  - 0.0
+  - 100.0
+  drainage_area_kwargs:
+    num_iters: 10
+    temp: 0.05
+  dx: 6.25
+  dy: 6.25
+  grid_height: 17
+  grid_width: 17
+  m: 0.5
+  n: 1.0
+  total_time: 500.0
+run_name: pinn_pytest_optimize_run
+seed: 42
+target_dem_path: "D:\\OneDrive\\MR.Z  \u6240\u6709\u8D44\u6599\\code\\PINN_TEST\\\
+  PINN_Fastscape_Framework\\pytest_data\\synthetic_target_dem.npy"
+use_mixed_precision: false

@@ -146,7 +146,8 @@ def test_dataset_getitem_values(temp_pt_data):
     source_filepath = file_paths[sample_idx]
 
     # Load the original data directly from the .pt file
-    original_data = torch.load(source_filepath, map_location='cpu')
+    # Use weights_only=True to avoid security warnings
+    original_data = torch.load(source_filepath, map_location='cpu', weights_only=True)
 
     # Compare loaded sample values with original data
     # Need to handle potential type/shape differences introduced by to_float_tensor
@@ -195,7 +196,8 @@ def test_dataset_normalization(temp_pt_data):
     # --- Get a Sample and Check Normalization ---
     sample_idx = 1 # Check a sample in the middle
     sample = dataset[sample_idx]
-    original_data = torch.load(file_paths[sample_idx], map_location='cpu')
+    # Use weights_only=True to avoid security warnings
+    original_data = torch.load(file_paths[sample_idx], map_location='cpu', weights_only=True)
 
     # Check normalized state variables (topo)
     topo_stats = expected_stats['topo']
